@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { USERS } from '../data/mockStore';
+import prisma from '../prisma';
 
 const router = Router();
 
@@ -18,69 +18,100 @@ const checkAuth = (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-router.get('/loadout', checkAuth, (req: Request, res: Response) => {
+router.get('/loadout', checkAuth, async (req: Request, res: Response) => {
     const userId = (req as AuthenticatedRequest).userId!;
-    const user = USERS.find(u => u.id === userId);
 
-    if (user) {
-        // Return simplified loadout for now
-        res.json({
-            currency: user.currency,
-            // In a real game, this would return equipped items
-            equipped: {
-                primary: 'AK47',
-                secondary: 'Pistol'
-            }
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { currency: true }
         });
-    } else {
-        res.status(404).json({ message: 'User not found' });
+
+        if (user) {
+            res.json({
+                currency: user.currency,
+                // In a real game, this would return equipped items from a Loadout model
+                equipped: {
+                    primary: 'AK47',
+                    secondary: 'Pistol'
+                }
+            });
+        } else {
+            res.status(404).json({ message: 'User not found' });
+        }
+    } catch (error) {
+        console.error('Loadout error:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 
-router.post('/sync', checkAuth, (req: Request, res: Response) => {
+router.post('/sync', checkAuth, async (req: Request, res: Response) => {
     const userId = (req as AuthenticatedRequest).userId!;
     const { kills, score, timePlayed, won } = req.body;
 
-    const user = USERS.find(u => u.id === userId);
-
-    if (user) {
-        // Update stats
-        if (user.stats) {
-            user.stats.matches += 1;
-            user.stats.wins += won ? 1 : 0;
-            user.stats.headshots += Math.floor(kills * 0.4); // Fake headshot stat
-            // user.stats.kills += kills; // Add if we had a total kills field
-        }
-
-        // Award currency
-        const tokensEarned = Math.floor(score / 100);
-        const xpEarned = score;
-
-        if (user.currency) {
-            user.currency.riftTokens += tokensEarned;
-        }
-
-        user.xp += xpEarned;
-
-        // Level up logic (simplified)
-        if (user.xp !== undefined && user.nextLevelXp !== undefined && user.level !== undefined) {
-            if (user.xp >= user.nextLevelXp) {
-                user.level++;
-                user.xp -= user.nextLevelXp;
-                user.nextLevelXp = Math.floor(user.nextLevelXp * 1.2);
-            }
-        }
-
-        console.log(`Synced stats for user ${userId}: +${tokensEarned} tokens, +${xpEarned} XP`);
-
-        res.json({
-            success: true,
-            newLevel: user.level,
-            newXp: user.xp,
-            currencyEarned: tokensEarned
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { stats: true, currency: true }
         });
-    } else {
-        res.status(404).json({ message: 'User not found' });
+
+        if (user && user.stats && user.currency) {
+            // Calculate rewards
+            const tokensEarned = Math.floor(score / 100);
+            const xpEarned = score;
+
+            let newLevel = user.stats.level;
+            let newXp = user.stats.xp + xpEarned;
+            let nextLevelXp = user.stats.nextLevelXp;
+
+            // Level up logic
+            if (newXp >= nextLevelXp) {
+                newLevel++;
+                newXp -= nextLevelXp;
+                nextLevelXp = Math.floor(nextLevelXp * 1.2);
+            }
+
+            // Update Stats and Currency in a transaction
+            const updatedUser = await prisma.$transaction(async (tx: any) => {
+                // Update Stats
+                const updatedStats = await tx.stats.update({
+                    where: { userId: user.id },
+                    data: {
+                        matches: { increment: 1 },
+                        wins: { increment: won ? 1 : 0 },
+                        kills: { increment: kills }, // We now track total kills!
+                        headshots: { increment: Math.floor(kills * 0.4) }, // Fake headshot stat
+                        level: newLevel,
+                        xp: newXp,
+                        nextLevelXp: nextLevelXp
+                    }
+                });
+
+                // Update Currency
+                const updatedCurrency = await tx.currency.update({
+                    where: { userId: user.id },
+                    data: {
+                        riftTokens: { increment: tokensEarned }
+                    }
+                });
+
+                return { stats: updatedStats, currency: updatedCurrency };
+            });
+
+            console.log(`Synced stats for user ${userId}: +${tokensEarned} tokens, +${xpEarned} XP`);
+
+            res.json({
+                success: true,
+                newLevel: updatedUser.stats.level,
+                newXp: updatedUser.stats.xp,
+                currencyEarned: tokensEarned
+            });
+        } else {
+            res.status(404).json({ message: 'User not found or missing stats' });
+        }
+    } catch (error) {
+        console.error('Sync error:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 

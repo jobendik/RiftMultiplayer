@@ -1,23 +1,27 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useWebSocket } from './WebSocketContext';
 import { api } from '../services/api';
+import { useAuth } from './AuthContext';
 
 const SocialContext = createContext(null);
 
 export const SocialProvider = ({ children }) => {
     const { subscribe } = useWebSocket();
+    const { isAuthenticated, token } = useAuth();
     const [friends, setFriends] = useState([]);
     const [friendRequests, setFriendRequests] = useState({ incoming: [], outgoing: [] });
     const [party, setParty] = useState(null);
 
     // Initial fetch
     useEffect(() => {
+        if (!isAuthenticated || !token) return;
+
         const fetchSocialData = async () => {
             try {
                 const [friendsList, requests, currentParty] = await Promise.all([
-                    api.getFriends(localStorage.getItem('auth_token')),
-                    api.getFriendRequests(localStorage.getItem('auth_token')),
-                    api.getParty(localStorage.getItem('auth_token'))
+                    api.getFriends(token),
+                    api.getFriendRequests(token),
+                    api.getParty(token)
                 ]);
                 setFriends(friendsList);
                 setFriendRequests(requests);
@@ -28,7 +32,7 @@ export const SocialProvider = ({ children }) => {
         };
 
         fetchSocialData();
-    }, []);
+    }, [isAuthenticated, token]);
 
     // Real-time updates
     useEffect(() => {

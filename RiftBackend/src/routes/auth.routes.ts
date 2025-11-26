@@ -1,16 +1,37 @@
-import { Router } from 'express';
-import { USERS } from '../data/mockStore';
+import { Router, Request, Response, NextFunction } from 'express';
+import prisma from '../prisma';
 
 const router = Router();
 
-router.post('/login', (req, res) => {
+export interface AuthenticatedRequest extends Request {
+    userId?: number;
+}
+
+export const checkAuth = (req: Request, res: Response, next: NextFunction) => {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (token && token.startsWith('mock-jwt-token-')) {
+        const userId = parseInt(token.split('-').pop() || '0');
+        (req as AuthenticatedRequest).userId = userId;
+        next();
+    } else {
+        res.status(401).json({ message: 'Unauthorized' });
+    }
+};
+
+router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
-    // Simulate delay
-    setTimeout(() => {
-        const user = USERS.find(u => u.email === email && u.password === password);
+    try {
+        const user = await prisma.user.findUnique({
+            where: { email },
+            include: {
+                stats: true,
+                currency: true
+            }
+        });
 
-        if (user) {
+        if (user && user.password === password) {
             // In a real app, we would generate a JWT here
             const token = 'mock-jwt-token-' + user.id;
             // Don't send password back
@@ -19,18 +40,27 @@ router.post('/login', (req, res) => {
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
         }
-    }, 800);
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
-router.get('/profile', (req, res) => {
+router.get('/profile', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
 
-    // Simulate delay
-    setTimeout(() => {
-        if (token && token.startsWith('mock-jwt-token-')) {
-            // Extract ID from mock token
-            const userId = parseInt(token.split('-').pop() || '0');
-            const user = USERS.find(u => u.id === userId);
+    if (token && token.startsWith('mock-jwt-token-')) {
+        // Extract ID from mock token
+        const userId = parseInt(token.split('-').pop() || '0');
+
+        try {
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                include: {
+                    stats: true,
+                    currency: true
+                }
+            });
 
             if (user) {
                 const { password, ...userWithoutPassword } = user;
@@ -38,10 +68,13 @@ router.get('/profile', (req, res) => {
             } else {
                 res.status(404).json({ message: 'User not found' });
             }
-        } else {
-            res.status(401).json({ message: 'Invalid token' });
+        } catch (error) {
+            console.error('Profile error:', error);
+            res.status(500).json({ message: 'Internal server error' });
         }
-    }, 500);
+    } else {
+        res.status(401).json({ message: 'Invalid token' });
+    }
 });
 
 export default router;

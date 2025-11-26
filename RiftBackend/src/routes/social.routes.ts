@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { USERS, FRIENDS, FRIEND_REQUESTS } from '../data/mockStore';
+import prisma from '../prisma';
 
 const router = Router();
 
@@ -18,51 +18,115 @@ const checkAuth = (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-router.get('/friends', checkAuth, (req: Request, res: Response) => {
-    // Simulate delay
-    setTimeout(() => {
-        const userId = (req as AuthenticatedRequest).userId!;
-        const friendIds = FRIENDS[userId] || [];
-        const friends = USERS.filter(u => friendIds.includes(u.id)).map(u => ({
-            id: u.id,
-            username: u.username,
-            tag: u.tag,
-            status: u.status || 'offline',
-            avatar: u.avatar,
-            activity: u.activity
+router.get('/friends', checkAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+
+    try {
+        // Find friendships where user is either userId or friendId
+        // But our schema has explicit relations: friends (UserFriends) and friendOf (FriendUser)
+        // We need to fetch both directions or normalize it.
+        // In seed, we created mutual records, so checking 'friends' relation might be enough if we always create both.
+        // Let's check 'friends' relation (where user is userId)
+
+        const userWithFriends = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                friends: {
+                    include: {
+                        friend: true
+                    }
+                }
+            }
+        });
+
+        if (!userWithFriends) {
+            return res.json([]);
+        }
+
+        const friends = userWithFriends.friends.map((f: any) => ({
+            id: f.friend.id,
+            username: f.friend.username,
+            tag: '0000', // Mock tag for now
+            status: 'offline', // Mock status for now
+            avatar: '/assets/avatars/default.png', // Mock avatar
+            activity: 'Online' // Mock activity
         }));
+
         res.json(friends);
-    }, 400);
+    } catch (error) {
+        console.error('Friends error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
-router.get('/friend-requests', checkAuth, (req: Request, res: Response) => {
-    setTimeout(() => {
-        const userId = (req as AuthenticatedRequest).userId!;
-        const requests = FRIEND_REQUESTS[userId] || { incoming: [], outgoing: [] };
+router.get('/friend-requests', checkAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
 
-        const incomingDetails = USERS.filter(u => requests.incoming.includes(u.id)).map(u => ({
-            id: u.id,
-            username: u.username,
-            tag: u.tag,
-            avatar: u.avatar
+    try {
+        const incoming = await prisma.friendRequest.findMany({
+            where: { receiverId: userId, status: 'PENDING' },
+            include: { sender: true }
+        });
+
+        const outgoing = await prisma.friendRequest.findMany({
+            where: { senderId: userId, status: 'PENDING' },
+            include: { receiver: true }
+        });
+
+        const incomingDetails = incoming.map((r: any) => ({
+            id: r.sender.id,
+            username: r.sender.username,
+            tag: '0000',
+            avatar: '/assets/avatars/default.png'
         }));
 
-        const outgoingDetails = USERS.filter(u => requests.outgoing.includes(u.id)).map(u => ({
-            id: u.id,
-            username: u.username,
-            tag: u.tag,
-            avatar: u.avatar
+        const outgoingDetails = outgoing.map((r: any) => ({
+            id: r.receiver.id,
+            username: r.receiver.username,
+            tag: '0000',
+            avatar: '/assets/avatars/default.png'
         }));
 
         res.json({ incoming: incomingDetails, outgoing: outgoingDetails });
-    }, 300);
+    } catch (error) {
+        console.error('Friend requests error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 router.get('/party', checkAuth, (req: Request, res: Response) => {
-    setTimeout(() => {
-        // Mock: Not in a party initially
-        res.json(null);
-    }, 200);
+    // Mock: Not in a party initially
+    res.json(null);
+});
+
+router.get('/leaderboard', checkAuth, async (req: Request, res: Response) => {
+    try {
+        const users = await prisma.user.findMany({
+            include: { stats: true },
+            orderBy: {
+                stats: {
+                    xp: 'desc'
+                }
+            },
+            take: 100
+        });
+
+        const leaderboard = users.map((user: any, index: number) => ({
+            rank: index + 1,
+            id: user.id,
+            username: user.username,
+            level: user.stats?.level || 1,
+            xp: user.stats?.xp || 0,
+            wins: user.stats?.wins || 0,
+            avatar: '/assets/avatars/default.png', // Placeholder
+            tag: '0000' // Placeholder
+        }));
+
+        res.json(leaderboard);
+    } catch (error) {
+        console.error('Leaderboard error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 export default router;

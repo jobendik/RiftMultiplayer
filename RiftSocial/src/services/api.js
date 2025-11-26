@@ -72,5 +72,49 @@ export const api = {
         }
 
         return response.json();
+    },
+
+    getLeaderboard: async (token) => {
+        const response = await fetch(`${API_URL}/social/leaderboard`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch leaderboard');
+        }
+
+        return response.json();
+        return response.json();
+    },
+
+    getShopItems: async () => {
+        const response = await fetch(`${API_URL}/shop/items`);
+        if (!response.ok) throw new Error('Failed to fetch shop items');
+        return response.json();
+    },
+
+    getInventory: async (token) => {
+        const response = await fetch(`${API_URL}/shop/inventory`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch inventory');
+        return response.json();
+    },
+
+    buyItem: async (token, itemId) => {
+        const response = await fetch(`${API_URL}/shop/buy`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ itemId })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Purchase failed');
+        return data;
     }
 };
