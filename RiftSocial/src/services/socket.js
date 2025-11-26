@@ -8,10 +8,12 @@ class SocketService {
         this.listeners = {};
     }
 
-    connect() {
+    connect(token) {
         if (this.socket) return;
 
-        this.socket = io(SOCKET_URL);
+        this.socket = io(SOCKET_URL, {
+            auth: { token }
+        });
 
         this.socket.on('connect', () => {
             console.log('Connected to WebSocket server');

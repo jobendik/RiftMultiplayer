@@ -52,7 +52,11 @@ export const FriendList = () => {
                     <h4 className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-3">Offline ({friends.filter(f => f.status === 'offline').length})</h4>
                     <div className="space-y-3">
                         {friends.filter(f => f.status === 'offline').map(friend => (
-                            <div key={friend.id} className="flex items-center gap-3 opacity-50 hover:opacity-100 transition-opacity cursor-pointer p-2">
+                            <div
+                                key={friend.id}
+                                onClick={() => openConversation(friend.id)}
+                                className="flex items-center gap-3 opacity-50 hover:opacity-100 transition-opacity cursor-pointer p-2"
+                            >
                                 <div className="w-8 h-8 bg-slate-800 rounded-full flex items-center justify-center text-lg grayscale">
                                     {friend.avatar}
                                 </div>

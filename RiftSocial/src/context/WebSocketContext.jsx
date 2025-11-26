@@ -1,21 +1,25 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { socketService } from '../services/socket';
+import { useAuth } from './AuthContext';
 
 const WebSocketContext = createContext(null);
 
 export const WebSocketProvider = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
+    const { token } = useAuth();
 
     useEffect(() => {
-        socketService.connect();
-        setIsConnected(true);
+        if (token) {
+            socketService.connect(token);
+            setIsConnected(true);
 
-        socketService.on('disconnect', () => setIsConnected(false));
+            socketService.on('disconnect', () => setIsConnected(false));
 
-        return () => {
-            socketService.disconnect();
-        };
-    }, []);
+            return () => {
+                socketService.disconnect();
+            };
+        }
+    }, [token]);
 
     const send = (event, data) => {
         socketService.send(event, data);

@@ -9,15 +9,21 @@ import { PlayView } from './views/PlayView';
 import { LoadoutsView } from './views/LoadoutsView';
 import { ProfileView } from './views/ProfileView';
 import { LeaderboardView } from './views/LeaderboardView';
-import { MarketView } from './views/MarketView';
+import { ShopView } from './views/ShopView';
 import { WikiView } from './views/WikiView';
 import { SettingsView } from './views/SettingsView';
 import { ClansView } from './views/ClansView';
 import { AuthView } from './views/AuthView';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WebSocketProvider } from './context/WebSocketContext';
+import { SocialProvider } from './context/SocialContext';
+import { ChatProvider } from './context/ChatContext';
+import { MatchmakingProvider } from './context/MatchmakingContext';
 
 import { FriendList } from './components/layout/FriendList';
+import { ChatWindow } from './components/layout/ChatWindow';
+import { PartyPanel } from './components/layout/PartyPanel';
+import { MatchFoundModal } from './components/layout/MatchFoundModal';
 
 const AuthenticatedApp = () => {
     const { user, logout } = useAuth();
@@ -56,7 +62,7 @@ const AuthenticatedApp = () => {
                         {activeTab === 'profile' && <ProfileView currentUser={user} />}
                         {activeTab === 'leaderboard' && <LeaderboardView />}
                         {activeTab === 'clans' && <ClansView />}
-                        {activeTab === 'market' && <MarketView />}
+                        {activeTab === 'shop' && <ShopView />}
                         {activeTab === 'wiki' && <WikiView />}
                         {activeTab === 'settings' && <SettingsView />}
                     </div>
@@ -81,17 +87,6 @@ const AppContent = () => {
 
     return isAuthenticated ? <AuthenticatedApp /> : <AuthView />;
 };
-
-import { SocialProvider } from './context/SocialContext';
-
-import { ChatProvider } from './context/ChatContext';
-import { ChatWindow } from './components/layout/ChatWindow';
-
-import { PartyPanel } from './components/layout/PartyPanel';
-
-import { MatchmakingProvider } from './context/MatchmakingContext';
-
-import { MatchFoundModal } from './components/layout/MatchFoundModal';
 
 const App = () => {
     return (

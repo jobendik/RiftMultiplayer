@@ -62,7 +62,7 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobileMenuOpen, setIsMobile
                 <NavItem id="profile" icon={User} label="My Profile" />
                 <NavItem id="leaderboard" icon={Trophy} label="Leaderboards" />
                 <NavItem id="clans" icon={Users} label="Clans" />
-                <NavItem id="market" icon={ShoppingCart} label="Market" />
+                <NavItem id="shop" icon={ShoppingCart} label="Shop" />
                 <NavItem id="wiki" icon={Book} label="Wiki" />
                 <NavItem id="settings" icon={Activity} label="Settings" />
             </nav>

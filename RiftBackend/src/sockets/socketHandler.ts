@@ -1,63 +1,83 @@
 import { Server, Socket } from 'socket.io';
+import prisma from '../prisma';
+
+// Map to store userId -> socketId
+const userSockets = new Map<number, string>();
 
 export const setupSocket = (io: Server) => {
-    io.on('connection', (socket: Socket) => {
-        console.log('Client connected:', socket.id);
+    // Middleware for authentication
+    io.use(async (socket, next) => {
+        const token = socket.handshake.auth.token;
 
-        socket.on('disconnect', () => {
-            console.log('Client disconnected:', socket.id);
+        if (token && token.startsWith('mock-jwt-token-')) {
+            const userId = parseInt(token.split('-').pop() || '0');
+            (socket as any).userId = userId;
+            next();
+        } else {
+            next(new Error('Authentication error'));
+        }
+    });
+
+    io.on('connection', (socket: Socket) => {
+        const userId = (socket as any).userId;
+        console.log(`User ${userId} connected (Socket: ${socket.id})`);
+
+        // Register user socket
+        userSockets.set(userId, socket.id);
+
+        // Broadcast presence update
+        socket.broadcast.emit('presence_update', {
+            userId: userId,
+            status: 'online'
         });
 
-        socket.on('chat_message', (data) => {
-            console.log('Received chat message:', data);
+        // Send current online users to the new user
+        userSockets.forEach((_, onlineUserId) => {
+            if (onlineUserId !== userId) {
+                socket.emit('presence_update', {
+                    userId: onlineUserId,
+                    status: 'online'
+                });
+            }
+        });
 
-            // Echo back with timestamp and ID
+        socket.on('disconnect', () => {
+            console.log(`User ${userId} disconnected`);
+            userSockets.delete(userId);
+
+            // Broadcast offline status
+            socket.broadcast.emit('presence_update', {
+                userId: userId,
+                status: 'offline'
+            });
+        });
+
+        socket.on('chat_message', async (data) => {
+            console.log(`Message from ${userId}:`, data);
+            const { recipientId, content } = data;
+
+            // Save to DB (optional, but good for persistence)
+            // For now, just relay
+
             const message = {
-                ...data,
                 id: Date.now(),
-                timestamp: new Date().toISOString()
+                senderId: userId,
+                recipientId,
+                content,
+                timestamp: new Date().toISOString(),
+                tempId: data.tempId // Echo back tempId
             };
 
-            // Broadcast to all (simplified for global chat)
-            io.emit('chat_message', message);
-        });
+            // Send to recipient if online
+            const recipientSocketId = userSockets.get(recipientId);
+            if (recipientSocketId) {
+                io.to(recipientSocketId).emit('chat_message', message);
+            } else {
+                console.log(`User ${recipientId} is offline`);
+            }
 
-        // Simulation: Send random presence updates
-        const presenceInterval = setInterval(() => {
-            const statuses = ['online', 'offline', 'in_game', 'away'];
-            const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-            const friendId = Math.floor(Math.random() * 4) + 2; // IDs 2-5
-
-            socket.emit('presence_update', {
-                userId: friendId,
-                status: randomStatus
-            });
-        }, 10000);
-
-        // Simulation: Send random chat messages
-        const chatInterval = setInterval(() => {
-            const messages = [
-                "Anyone up for ranked?",
-                "Did you see the new skin?",
-                "gg last game",
-                "invite pls",
-                "brb 5 mins"
-            ];
-            const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-            const friendId = Math.floor(Math.random() * 4) + 2;
-
-            socket.emit('chat_message', {
-                id: Date.now(),
-                senderId: friendId,
-                content: randomMsg,
-                timestamp: new Date().toISOString(),
-                channelId: 'global'
-            });
-        }, 15000);
-
-        socket.on('disconnect', () => {
-            clearInterval(presenceInterval);
-            clearInterval(chatInterval);
+            // Echo back to sender (for confirmation/optimistic update sync)
+            socket.emit('message_sent', message);
         });
     });
 };
