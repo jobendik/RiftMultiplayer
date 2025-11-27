@@ -95,8 +95,9 @@ router.get('/friend-requests', checkAuth, async (req: Request, res: Response) =>
 });
 
 router.get('/party', checkAuth, (req: Request, res: Response) => {
-    // Mock: Not in a party initially
-    res.json(null);
+    const userId = (req as AuthenticatedRequest).userId!;
+    const party = partyManager.getUserParty(userId);
+    res.json(party || null);
 });
 
 router.get('/leaderboard', checkAuth, async (req: Request, res: Response) => {
@@ -130,3 +131,171 @@ router.get('/leaderboard', checkAuth, async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// --- Friend Request Actions ---
+
+router.post('/friends/request', checkAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+    const { username } = req.body;
+
+    try {
+        const targetUser = await prisma.user.findUnique({ where: { username } });
+        if (!targetUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (targetUser.id === userId) {
+            return res.status(400).json({ message: 'Cannot add yourself' });
+        }
+
+        // Check existing request
+        const existing = await prisma.friendRequest.findFirst({
+            where: {
+                OR: [
+                    { senderId: userId, receiverId: targetUser.id },
+                    { senderId: targetUser.id, receiverId: userId }
+                ],
+                status: 'PENDING'
+            }
+        });
+
+        if (existing) {
+            return res.status(400).json({ message: 'Request already pending' });
+        }
+
+        // Check if already friends
+        const alreadyFriends = await prisma.friendship.findFirst({
+            where: { userId, friendId: targetUser.id }
+        });
+
+        if (alreadyFriends) {
+            return res.status(400).json({ message: 'Already friends' });
+        }
+
+        await prisma.friendRequest.create({
+            data: {
+                senderId: userId,
+                receiverId: targetUser.id
+            }
+        });
+
+        res.json({ message: 'Friend request sent' });
+    } catch (error) {
+        console.error('Send request error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+router.post('/friends/accept', checkAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+    const { requestId } = req.body;
+
+    try {
+        const senderId = parseInt(requestId);
+
+        const request = await prisma.friendRequest.findFirst({
+            where: {
+                senderId: senderId,
+                receiverId: userId,
+                status: 'PENDING'
+            }
+        });
+
+        if (!request) {
+            return res.status(404).json({ message: 'Request not found' });
+        }
+
+        // Transaction to create friendship both ways and update request
+        await prisma.$transaction([
+            prisma.friendRequest.update({
+                where: { id: request.id },
+                data: { status: 'ACCEPTED' }
+            }),
+            prisma.friendship.create({
+                data: { userId, friendId: senderId }
+            }),
+            prisma.friendship.create({
+                data: { userId: senderId, friendId: userId }
+            })
+        ]);
+
+        res.json({ message: 'Friend request accepted' });
+    } catch (error) {
+        console.error('Accept request error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// --- Party Actions ---
+import { partyManager } from '../managers/PartyManager';
+
+router.post('/party/create', checkAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+    console.log(`[Social] Creating party for user ${userId}`);
+
+    // Get username (optional, but good for display)
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const username = user?.username || `User ${userId}`;
+
+    const party = partyManager.createParty(userId, username);
+    console.log(`[Social] Party created:`, party);
+    res.json(party);
+});
+
+import { sendToUser } from '../sockets/socketHandler';
+
+router.post('/party/invite', checkAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+    const { userId: targetUserId } = req.body;
+
+    // Get username
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const username = user?.username || `User ${userId}`;
+
+    // Get party
+    const party = partyManager.getUserParty(userId);
+    if (!party) {
+        return res.status(400).json({ message: 'You are not in a party' });
+    }
+
+    // Send socket event
+    const io = req.app.get('io');
+    const sent = sendToUser(io, targetUserId, 'party_invite', {
+        partyId: party.id,
+        senderId: userId,
+        senderName: username
+    });
+
+    if (sent) {
+        res.json({ message: 'Invite sent' });
+    } else {
+        // Still success, maybe they are offline but we could store a notification
+        res.json({ message: 'Invite sent (User offline)' });
+    }
+});
+
+router.post('/party/join', checkAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+    const { partyId } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const username = user?.username || `User ${userId}`;
+
+    const party = partyManager.joinParty(partyId, userId, username);
+    if (!party) {
+        return res.status(404).json({ message: 'Party not found' });
+    }
+
+    res.json(party);
+});
+
+router.post('/party/leave', checkAuth, (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+    partyManager.leaveParty(userId);
+    res.json({ message: 'Left party' });
+});
+
+router.post('/party/kick', checkAuth, (req: Request, res: Response) => {
+    // TODO: Implement kick
+    res.json({ message: 'Player kicked' });
+});

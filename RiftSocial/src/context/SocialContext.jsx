@@ -53,15 +53,110 @@ export const SocialProvider = ({ children }) => {
             setParty(updatedParty);
         });
 
+        const unsubPartyInvite = subscribe('party_invite', ({ partyId, senderName }) => {
+            // Simple confirm for now. In real app, use a Toast or Notification system.
+            if (window.confirm(`${senderName} invited you to a party! Join?`)) {
+                joinParty(partyId);
+            }
+        });
+
         return () => {
             unsubPresence();
             unsubFriendReq();
             unsubPartyUpdate();
+            unsubPartyInvite();
         };
     }, [subscribe]);
 
+    const sendFriendRequest = async (username) => {
+        try {
+            await api.sendFriendRequest(token, username);
+        } catch (error) {
+            console.error('Send request failed:', error);
+        }
+    };
+
+    const acceptFriendRequest = async (requestId) => {
+        try {
+            await api.acceptFriendRequest(token, requestId);
+            const [friendsList, requests] = await Promise.all([
+                api.getFriends(token),
+                api.getFriendRequests(token)
+            ]);
+            setFriends(friendsList);
+            setFriendRequests(requests);
+        } catch (error) {
+            console.error('Accept request failed:', error);
+        }
+    };
+
+    const createParty = async () => {
+        try {
+            const newParty = await api.createParty(token);
+            setParty(newParty);
+        } catch (error) {
+            console.error('Create party failed:', error);
+        }
+    };
+
+    const inviteToParty = async (userId) => {
+        console.log('inviteToParty called for:', userId);
+        try {
+            if (!party) {
+                console.log('No party exists, creating one...');
+                const newParty = await api.createParty(token);
+                console.log('Party created:', newParty);
+                setParty(newParty);
+            }
+            console.log('Sending invite to:', userId);
+            await api.inviteToParty(token, userId);
+            console.log('Invite sent successfully');
+        } catch (error) {
+            console.error('Invite failed:', error);
+        }
+    };
+
+    const joinParty = async (partyId) => {
+        try {
+            const joinedParty = await api.joinParty(token, partyId);
+            setParty(joinedParty);
+        } catch (error) {
+            console.error('Join party failed:', error);
+        }
+    };
+
+    const leaveParty = async () => {
+        try {
+            await api.leaveParty(token);
+            setParty(null);
+        } catch (error) {
+            console.error('Leave party failed:', error);
+        }
+    };
+
+    const kickFromParty = async (userId) => {
+        try {
+            await api.kickFromParty(token, userId);
+            const currentParty = await api.getParty(token);
+            setParty(currentParty);
+        } catch (error) {
+            console.error('Kick failed:', error);
+        }
+    };
+
     return (
-        <SocialContext.Provider value={{ friends, friendRequests, party }}>
+        <SocialContext.Provider value={{
+            friends,
+            friendRequests,
+            party,
+            sendFriendRequest,
+            acceptFriendRequest,
+            createParty,
+            inviteToParty,
+            joinParty,
+            leaveParty,
+            kickFromParty
+        }}>
             {children}
         </SocialContext.Provider>
     );

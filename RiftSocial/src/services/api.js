@@ -133,5 +133,96 @@ export const api = {
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Purchase failed');
         return data;
+    },
+
+    // --- Social Actions ---
+
+    sendFriendRequest: async (token, username) => {
+        const response = await fetch(`${API_URL}/social/friends/request`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ username })
+        });
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || 'Failed to send request');
+        }
+        return response.json();
+    },
+
+    acceptFriendRequest: async (token, requestId) => {
+        const response = await fetch(`${API_URL}/social/friends/accept`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ requestId })
+        });
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || 'Failed to accept request');
+        }
+        return response.json();
+    },
+
+    createParty: async (token) => {
+        const response = await fetch(`${API_URL}/social/party/create`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to create party');
+        return response.json();
+    },
+
+    inviteToParty: async (token, userId) => {
+        const response = await fetch(`${API_URL}/social/party/invite`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userId })
+        });
+        if (!response.ok) throw new Error('Failed to invite');
+        return response.json();
+    },
+
+    joinParty: async (token, partyId) => {
+        const response = await fetch(`${API_URL}/social/party/join`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ partyId })
+        });
+        if (!response.ok) throw new Error('Failed to join party');
+        return response.json();
+    },
+
+    leaveParty: async (token) => {
+        const response = await fetch(`${API_URL}/social/party/leave`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to leave party');
+        return response.json();
+    },
+
+    kickFromParty: async (token, userId) => {
+        const response = await fetch(`${API_URL}/social/party/kick`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userId })
+        });
+        if (!response.ok) throw new Error('Failed to kick player');
+        return response.json();
     }
 };

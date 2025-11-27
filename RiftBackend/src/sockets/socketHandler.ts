@@ -5,6 +5,20 @@ import { setupGameHandler } from './gameHandler';
 // Map to store userId -> socketId
 const userSockets = new Map<number, string>();
 
+// Helper to send message to specific user from outside
+export const sendToUser = (io: Server, userId: number, event: string, data: any) => {
+    const socketId = userSockets.get(userId);
+    if (socketId) {
+        io.to(socketId).emit(event, data);
+        return true;
+    }
+    return false;
+};
+
+export const getSocketId = (userId: number): string | undefined => {
+    return userSockets.get(userId);
+};
+
 export const setupSocket = (io: Server) => {
     // Middleware for authentication
     io.use(async (socket, next) => {

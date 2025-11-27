@@ -1,4 +1,6 @@
 import { Server, Socket } from 'socket.io';
+import { partyManager } from '../managers/PartyManager';
+import { getSocketId } from './socketHandler';
 
 interface QueuedPlayer {
     userId: number;
@@ -25,6 +27,43 @@ export const setupMatchmaking = (io: Server, socket: Socket) => {
     socket.on('start_queue', (data) => {
         const { modeId } = data;
         console.log(`User ${userId} joined queue for ${modeId}`);
+
+        // Check if user is in a party
+        const party = partyManager.getUserParty(userId);
+
+        if (party) {
+            // Only leader can start queue
+            if (party.leaderId !== userId) {
+                socket.emit('error', { message: 'Only party leader can start queue' });
+                return;
+            }
+
+            // Queue all members
+            party.members.forEach(member => {
+                // Check if already in queue
+                if (queue.find(p => p.userId === member.userId)) {
+                    return;
+                }
+
+                const memberSocketId = getSocketId(member.userId);
+                if (memberSocketId) {
+                    const player: QueuedPlayer = {
+                        userId: member.userId,
+                        socketId: memberSocketId,
+                        modeId,
+                        timestamp: Date.now()
+                    };
+                    queue.push(player);
+                    console.log(`Queued party member ${member.userId} (Socket: ${memberSocketId})`);
+                } else {
+                    console.warn(`Could not queue party member ${member.userId}: Socket not found`);
+                }
+            });
+
+            // Try to find a match immediately after queuing party
+            findMatch(io, modeId);
+            return;
+        }
 
         // Check if already in queue
         if (queue.find(p => p.userId === userId)) {
