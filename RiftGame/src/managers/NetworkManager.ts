@@ -14,6 +14,8 @@ export class NetworkManager {
     private scores: any = { players: {} };
 
     public myUserId: string;
+    public myTeam: string = '';
+    public playerTeams: Map<string, string> = new Map();
 
     constructor(game: Game) {
         this.game = game;
@@ -41,8 +43,13 @@ export class NetworkManager {
             this.socket.emit('join_match', this.matchId);
         });
 
-        this.socket.on('player_joined', (data: { userId: string }) => {
-            console.log(`Player ${data.userId} joined`);
+        this.socket.on('player_joined', (data: { userId: string, team?: string }) => {
+            console.log(`Player ${data.userId} joined (${data.team})`);
+
+            if (data.team) {
+                this.playerTeams.set(data.userId, data.team);
+            }
+
             // Create remote player if not exists
             if (!this.remotePlayers.has(data.userId)) {
                 this.addRemotePlayer(data.userId);
@@ -104,11 +111,23 @@ export class NetworkManager {
             if (this.game.handleKillFeed) {
                 this.game.handleKillFeed(attackerId, victimId, weaponType);
             }
+
+            // Pass team info for TDM scoring
+            const victimTeam = this.playerTeams.get(String(victimId)) || (String(victimId) === this.myUserId ? this.myTeam : '');
+            const attackerTeam = this.playerTeams.get(String(attackerId)) || (String(attackerId) === this.myUserId ? this.myTeam : '');
+
+            if (this.game.gameModeManager.getCurrentMode()?.getName() === 'Team Deathmatch') {
+                (this.game.gameModeManager.getCurrentMode() as any).onPlayerKilled(String(victimId), String(attackerId), victimTeam, attackerTeam);
+            }
         });
 
         this.socket.on('player_respawned', (data: any) => {
-            const { userId } = data;
-            console.log(`Player ${userId} respawned`);
+            const { userId, team } = data;
+            console.log(`Player ${userId} respawned (${team})`);
+
+            if (team) {
+                this.playerTeams.set(userId, team);
+            }
 
             // Remove from dead players list
             this.deadPlayers.delete(userId);
@@ -122,6 +141,22 @@ export class NetworkManager {
         this.socket.on('match_state', (state: any) => {
             console.log('Received match state:', state);
             this.scores = state;
+
+            // Sync teams
+            if (state.teams) {
+                Object.entries(state.teams).forEach(([uid, team]: [string, any]) => {
+                    this.playerTeams.set(uid, team);
+                    if (uid === this.myUserId) {
+                        this.myTeam = team;
+                        console.log('My team:', this.myTeam);
+                    } else {
+                        // Update existing remote player color
+                        const rp = this.remotePlayers.get(uid);
+                        if (rp) rp.setTeam(team);
+                    }
+                });
+            }
+
             if (this.game.handleScoreUpdate) {
                 this.game.handleScoreUpdate(this.scores);
             }
@@ -142,6 +177,14 @@ export class NetworkManager {
                 this.game.handleMatchEnd(finalState);
             }
         });
+
+        this.socket.on('flag_update', (data: { action: string, team: string, playerId: string, position?: any }) => {
+            console.log(`Flag Update: ${data.action} ${data.team} by ${data.playerId}`);
+            const mode = this.game.gameModeManager.getCurrentMode();
+            if (mode && mode.getName() === 'Capture The Flag') {
+                (mode as any).onFlagAction(data.action, data.team, data.playerId);
+            }
+        });
     }
 
     public getRemotePlayers(): RemotePlayer[] {
@@ -159,6 +202,13 @@ export class NetworkManager {
     private addRemotePlayer(userId: string): RemotePlayer {
         const player = new RemotePlayer(this.game.getScene(), userId);
         this.remotePlayers.set(userId, player);
+
+        // Set team color if known
+        const team = this.playerTeams.get(userId);
+        if (team) {
+            player.setTeam(team);
+        }
+
         return player;
     }
 
@@ -203,6 +253,13 @@ export class NetworkManager {
     }
 
     public sendPlayerHit(targetId: string, damage: number, hitLocation: THREE.Vector3) {
+        // Friendly Fire Check
+        const targetTeam = this.playerTeams.get(targetId);
+        if (this.myTeam && targetTeam && this.myTeam === targetTeam) {
+            console.log('Friendly fire! Damage ignored.');
+            return;
+        }
+
         this.socket.emit('player_hit', {
             matchId: this.matchId,
             targetId,
@@ -222,6 +279,15 @@ export class NetworkManager {
     public sendPlayerRespawn() {
         this.socket.emit('player_respawn', {
             matchId: this.matchId
+        });
+    }
+
+    public sendFlagAction(action: string, team: string, position?: THREE.Vector3) {
+        this.socket.emit('flag_action', {
+            matchId: this.matchId,
+            action,
+            team,
+            position: position ? { x: position.x, y: position.y, z: position.z } : undefined
         });
     }
 }

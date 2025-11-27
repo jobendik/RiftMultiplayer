@@ -60,11 +60,17 @@ export const SocialProvider = ({ children }) => {
             }
         });
 
+        const unsubPartyKicked = subscribe('party_kicked', ({ message }) => {
+            alert(message);
+            setParty(null);
+        });
+
         return () => {
             unsubPresence();
             unsubFriendReq();
             unsubPartyUpdate();
             unsubPartyInvite();
+            unsubPartyKicked();
         };
     }, [subscribe]);
 
@@ -137,10 +143,17 @@ export const SocialProvider = ({ children }) => {
     const kickFromParty = async (userId) => {
         try {
             await api.kickFromParty(token, userId);
-            const currentParty = await api.getParty(token);
-            setParty(currentParty);
+            // No need to fetch party here, socket update will handle it
         } catch (error) {
             console.error('Kick failed:', error);
+        }
+    };
+
+    const toggleReady = async () => {
+        try {
+            await api.toggleReady(token);
+        } catch (error) {
+            console.error('Toggle ready failed:', error);
         }
     };
 
@@ -155,7 +168,8 @@ export const SocialProvider = ({ children }) => {
             inviteToParty,
             joinParty,
             leaveParty,
-            kickFromParty
+            kickFromParty,
+            toggleReady
         }}>
             {children}
         </SocialContext.Provider>

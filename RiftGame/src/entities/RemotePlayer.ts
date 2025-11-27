@@ -65,4 +65,17 @@ export class RemotePlayer {
     public destroy() {
         this.scene.remove(this.mesh);
     }
+
+    public setTeam(team: string) {
+        const cylinder = this.mesh.children[0] as THREE.Mesh;
+        if (cylinder && cylinder.material instanceof THREE.MeshStandardMaterial) {
+            if (team === 'blue') {
+                cylinder.material.color.setHex(0x3b82f6); // Blue
+            } else if (team === 'red') {
+                cylinder.material.color.setHex(0xef4444); // Red
+            } else {
+                cylinder.material.color.setHex(0xff0000); // Default Red
+            }
+        }
+    }
 }

@@ -224,5 +224,17 @@ export const api = {
         });
         if (!response.ok) throw new Error('Failed to kick player');
         return response.json();
+    },
+
+    toggleReady: async (token) => {
+        const response = await fetch(`${API_URL}/social/party/ready`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        if (!response.ok) throw new Error('Failed to toggle ready');
+        return response.json();
     }
 };

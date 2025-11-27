@@ -286,16 +286,73 @@ router.post('/party/join', checkAuth, async (req: Request, res: Response) => {
         return res.status(404).json({ message: 'Party not found' });
     }
 
+    // Emit update to all members
+    const io = req.app.get('io');
+    party.members.forEach(m => {
+        sendToUser(io, m.userId, 'party_update', party);
+    });
+
     res.json(party);
 });
 
 router.post('/party/leave', checkAuth, (req: Request, res: Response) => {
     const userId = (req as AuthenticatedRequest).userId!;
-    partyManager.leaveParty(userId);
+    const party = partyManager.leaveParty(userId);
+
+    if (party) {
+        // Emit update to remaining members
+        const io = req.app.get('io');
+        party.members.forEach(m => {
+            sendToUser(io, m.userId, 'party_update', party);
+        });
+    }
+
     res.json({ message: 'Left party' });
 });
 
 router.post('/party/kick', checkAuth, (req: Request, res: Response) => {
-    // TODO: Implement kick
+    const userId = (req as AuthenticatedRequest).userId!;
+    const { userId: targetUserId } = req.body;
+
+    const party = partyManager.getUserParty(userId);
+    if (!party || party.leaderId !== userId) {
+        return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    const updatedParty = partyManager.kickMember(party.id, targetUserId);
+
+    const io = req.app.get('io');
+
+    // Notify kicked user
+    sendToUser(io, targetUserId, 'party_update', null); // null means no party
+    sendToUser(io, targetUserId, 'party_kicked', { message: 'You were kicked from the party' });
+
+    if (updatedParty) {
+        // Notify remaining members
+        updatedParty.members.forEach(m => {
+            sendToUser(io, m.userId, 'party_update', updatedParty);
+        });
+    }
+
     res.json({ message: 'Player kicked' });
+});
+
+router.post('/party/ready', checkAuth, (req: Request, res: Response) => {
+    const userId = (req as AuthenticatedRequest).userId!;
+    const party = partyManager.getUserParty(userId);
+
+    if (!party) {
+        return res.status(400).json({ message: 'Not in a party' });
+    }
+
+    const updatedParty = partyManager.toggleReady(party.id, userId);
+
+    if (updatedParty) {
+        const io = req.app.get('io');
+        updatedParty.members.forEach(m => {
+            sendToUser(io, m.userId, 'party_update', updatedParty);
+        });
+    }
+
+    res.json({ message: 'Ready status toggled' });
 });

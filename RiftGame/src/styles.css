@@ -1233,3 +1233,24 @@ body.hovering {
   background: rgba(0, 255, 255, 0.1);
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
 }
+
+/* Killfeed Team Colors */
+.killfeed-killer.team-red,
+.killfeed-victim.team-red {
+  color: #ef4444;
+  text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+}
+
+.killfeed-killer.team-blue,
+.killfeed-victim.team-blue {
+  color: #3b82f6;
+  text-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+}
+
+.killfeed-killer.enemy {
+  color: #ef4444;
+}
+
+.killfeed-victim.player {
+  color: #3b82f6;
+}

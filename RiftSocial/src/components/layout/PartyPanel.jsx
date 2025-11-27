@@ -1,10 +1,12 @@
 import React from 'react';
-import { Crown, UserPlus, X, Shield, LogOut, Ban } from 'lucide-react';
+import { Crown, UserPlus, X, Shield, LogOut, Ban, MessageCircle } from 'lucide-react';
 import { useSocial } from '../../context/SocialContext';
 import { useAuth } from '../../context/AuthContext';
+import { useChat } from '../../context/ChatContext';
 
 export const PartyPanel = () => {
-    const { party, leaveParty, kickFromParty } = useSocial();
+    const { party, leaveParty, kickFromParty, toggleReady } = useSocial();
+    const { openConversation } = useChat();
     const { user } = useAuth();
 
     if (!party) return null;
@@ -18,13 +20,22 @@ export const PartyPanel = () => {
                     <Shield size={16} className="text-purple-500" />
                     <span className="font-bold text-sm text-white uppercase tracking-wider">Fireteam ({party.members.length}/4)</span>
                 </div>
-                <button
-                    onClick={leaveParty}
-                    className="text-slate-500 hover:text-red-400 transition-colors"
-                    title="Leave Party"
-                >
-                    <LogOut size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => openConversation('party')}
+                        className="text-slate-500 hover:text-white transition-colors"
+                        title="Party Chat"
+                    >
+                        <MessageCircle size={16} />
+                    </button>
+                    <button
+                        onClick={leaveParty}
+                        className="text-slate-500 hover:text-red-400 transition-colors"
+                        title="Leave Party"
+                    >
+                        <LogOut size={16} />
+                    </button>
+                </div>
             </div>
 
             <div className="p-2 space-y-1">
@@ -72,7 +83,10 @@ export const PartyPanel = () => {
             </div>
 
             <div className="p-3 border-t border-slate-800 bg-slate-900/30 rounded-b-lg">
-                <button className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-widest clip-path-polygon transition-all hover:shadow-[0_0_15px_rgba(168,85,247,0.4)]">
+                <button
+                    onClick={toggleReady}
+                    className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-widest clip-path-polygon transition-all hover:shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                >
                     Ready Up
                 </button>
             </div>

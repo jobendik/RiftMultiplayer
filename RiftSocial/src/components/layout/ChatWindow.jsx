@@ -4,24 +4,31 @@ import { useChat } from '../../context/ChatContext';
 import { useSocial } from '../../context/SocialContext';
 
 export const ChatWindow = () => {
-    const { activeConversationId, conversations, sendMessage, closeConversation } = useChat();
+    const { activeConversationId, conversations, partyMessages, sendMessage, sendPartyMessage, closeConversation } = useChat();
     const { friends } = useSocial();
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = useRef(null);
 
-    const activeFriend = friends.find(f => f.id === activeConversationId);
-    const messages = conversations[activeConversationId] || [];
+    const isPartyChat = activeConversationId === 'party';
+    const activeFriend = !isPartyChat ? friends.find(f => f.id === activeConversationId) : null;
+
+    const messages = isPartyChat ? partyMessages : (conversations[activeConversationId] || []);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    if (!activeConversationId || !activeFriend) return null;
+    if (!activeConversationId || (!isPartyChat && !activeFriend)) return null;
 
     const handleSend = (e) => {
         e.preventDefault();
         if (!inputValue.trim()) return;
-        sendMessage(activeConversationId, inputValue);
+
+        if (isPartyChat) {
+            sendPartyMessage(inputValue);
+        } else {
+            sendMessage(activeConversationId, inputValue);
+        }
         setInputValue('');
     };
 
@@ -30,8 +37,8 @@ export const ChatWindow = () => {
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900/50 rounded-t-lg cursor-pointer hover:bg-slate-900 transition-colors">
                 <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${activeFriend.status === 'online' ? 'bg-green-500' : 'bg-slate-500'}`} />
-                    <span className="font-bold text-sm text-white">{activeFriend.username}</span>
+                    <div className={`w-2 h-2 rounded-full ${isPartyChat ? 'bg-purple-500' : (activeFriend?.status === 'online' ? 'bg-green-500' : 'bg-slate-500')}`} />
+                    <span className="font-bold text-sm text-white">{isPartyChat ? 'Party Chat' : activeFriend?.username}</span>
                 </div>
                 <button onClick={closeConversation} className="text-slate-500 hover:text-white">
                     <X size={16} />

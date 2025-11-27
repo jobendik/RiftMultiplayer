@@ -10,7 +10,7 @@ export class KillfeedManager {
         }
     }
 
-    public addKill(killer: string, victim: string, weapon: string, isHeadshot: boolean, isMultiKill: boolean = false): void {
+    public addKill(killer: string, victim: string, weapon: string, isHeadshot: boolean, isMultiKill: boolean = false, killerTeam: string = '', victimTeam: string = ''): void {
         if (!this.container) return;
 
         // Use requestAnimationFrame to defer DOM manipulation
@@ -20,13 +20,21 @@ export class KillfeedManager {
             if (isHeadshot) item.classList.add('headshot');
             if (isMultiKill) item.classList.add('multikill');
 
-            // Build HTML string for better performance (single innerHTML vs multiple appendChild)
-            const killerClass = killer === 'Enemy' ? 'killfeed-killer enemy' : 'killfeed-killer';
-            const victimClass = victim === 'Player' ? 'killfeed-victim player' : 'killfeed-victim';
-            const headshotIcon = isHeadshot 
+            // Determine classes based on team or entity type
+            let killerClass = 'killfeed-killer';
+            if (killerTeam === 'red') killerClass += ' team-red';
+            else if (killerTeam === 'blue') killerClass += ' team-blue';
+            else if (killer === 'Enemy') killerClass += ' enemy';
+
+            let victimClass = 'killfeed-victim';
+            if (victimTeam === 'red') victimClass += ' team-red';
+            else if (victimTeam === 'blue') victimClass += ' team-blue';
+            else if (victim === 'Player') victimClass += ' player';
+
+            const headshotIcon = isHeadshot
                 ? '<img src="assets/images/Headshot-Icon.png_ca1ab804.png" class="killfeed-icon">'
                 : '';
-            
+
             item.innerHTML = `
                 <span class="${killerClass}">${killer}</span>
                 <span class="killfeed-weapon">[${weapon}]</span>

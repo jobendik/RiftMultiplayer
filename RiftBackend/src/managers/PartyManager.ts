@@ -68,9 +68,9 @@ class PartyManager {
         return party;
     }
 
-    leaveParty(userId: number): void {
+    leaveParty(userId: number): Party | null {
         const partyId = this.userToParty.get(userId);
-        if (!partyId) return;
+        if (!partyId) return null;
 
         const party = this.parties.get(partyId);
         if (party) {
@@ -80,6 +80,7 @@ class PartyManager {
             // If leader left, assign new leader or disband
             if (party.members.length === 0) {
                 this.parties.delete(partyId);
+                return null;
             } else if (party.leaderId === userId && party.members.length > 0) {
                 const newLeader = party.members[0];
                 if (newLeader) {
@@ -87,7 +88,32 @@ class PartyManager {
                     party.leaderId = newLeader.userId;
                 }
             }
+            return party;
         }
+        return null;
+    }
+
+    kickMember(partyId: string, targetUserId: number): Party | null {
+        const party = this.parties.get(partyId);
+        if (!party) return null;
+
+        // Remove member
+        party.members = party.members.filter(m => m.userId !== targetUserId);
+        this.userToParty.delete(targetUserId);
+
+        return party;
+    }
+
+    toggleReady(partyId: string, userId: number): Party | null {
+        const party = this.parties.get(partyId);
+        if (!party) return null;
+
+        const member = party.members.find(m => m.userId === userId);
+        if (member) {
+            member.isReady = !member.isReady;
+        }
+
+        return party;
     }
 }
 

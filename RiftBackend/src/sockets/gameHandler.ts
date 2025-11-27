@@ -11,6 +11,7 @@ interface PlayerState {
 
 interface MatchState {
     players: Record<string, PlayerState>;
+    teams: Record<string, string>; // userId -> 'red' | 'blue'
     startTime: number;
     endTime?: number;
 }
@@ -30,6 +31,7 @@ export const setupGameHandler = (io: Server, socket: Socket) => {
         if (!matches.has(matchId)) {
             matches.set(matchId, {
                 players: {},
+                teams: {},
                 startTime: Date.now()
             });
         }
@@ -38,10 +40,6 @@ export const setupGameHandler = (io: Server, socket: Socket) => {
 
         // Init player stats if not exists
         if (!match.players[userId]) {
-            // Fetch username from DB (optional, or pass from client)
-            // For now, use a placeholder or fetch if possible.
-            // Let's assume we can get it from the token or DB.
-            // For speed, we'll just use "Player " + userId
             match.players[userId] = {
                 kills: 0,
                 deaths: 0,
@@ -50,8 +48,19 @@ export const setupGameHandler = (io: Server, socket: Socket) => {
             };
         }
 
+        // Ensure team is assigned (even if player existed)
+        if (!match.teams[userId]) {
+            const redCount = Object.values(match.teams).filter(t => t === 'red').length;
+            const blueCount = Object.values(match.teams).filter(t => t === 'blue').length;
+            const newTeam = redCount <= blueCount ? 'red' : 'blue';
+            match.teams[userId] = newTeam;
+            console.log(`Assigned User ${userId} to ${newTeam} (Red: ${redCount}, Blue: ${blueCount})`);
+        }
+
+        const team = match.teams[userId];
+
         // Notify others in the room
-        socket.to(matchId).emit('player_joined', { userId });
+        socket.to(matchId).emit('player_joined', { userId, team });
 
         // Send current match state to new player
         socket.emit('match_state', match);
@@ -100,9 +109,12 @@ export const setupGameHandler = (io: Server, socket: Socket) => {
     // Player Respawn
     socket.on('player_respawn', (data) => {
         const { matchId } = data;
+        const match = matches.get(matchId);
+        const team = match?.teams[userId];
 
         io.to(matchId).emit('player_respawned', {
-            userId
+            userId,
+            team
         });
     });
 
@@ -138,6 +150,19 @@ export const setupGameHandler = (io: Server, socket: Socket) => {
         if (match.players[attackerId] && match.players[attackerId].kills >= 25) {
             endMatch(io, matchId);
         }
+    });
+
+    // Flag Action (CTF)
+    socket.on('flag_action', (data) => {
+        const { matchId, action, team, position } = data;
+
+        // Broadcast to everyone in match
+        io.to(matchId).emit('flag_update', {
+            action,
+            team,
+            playerId: userId,
+            position
+        });
     });
 };
 

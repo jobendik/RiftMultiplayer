@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useSocial } from '../../context/SocialContext';
 import { useChat } from '../../context/ChatContext';
-import { UserPlus, Check, X, MessageSquare, Plus } from 'lucide-react';
+import { UserPlus, Check, X, MessageSquare, Plus, Users } from 'lucide-react';
 
 export const FriendList = () => {
-    const { friends, friendRequests, sendFriendRequest, acceptFriendRequest, inviteToParty } = useSocial();
+    const { friends, friendRequests, sendFriendRequest, acceptFriendRequest, inviteToParty, createParty, party } = useSocial();
     const { openConversation } = useChat();
     const [addUsername, setAddUsername] = useState('');
     const [showAddInput, setShowAddInput] = useState(false);
@@ -34,12 +34,24 @@ export const FriendList = () => {
         <div className="fixed right-0 top-16 bottom-0 w-64 bg-[#080808] border-l border-slate-800 hidden xl:flex flex-col z-30">
             <div className="p-4 border-b border-slate-800 flex justify-between items-center">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Social Uplink</h3>
-                <button
-                    onClick={() => setShowAddInput(!showAddInput)}
-                    className="text-slate-400 hover:text-cyan-400 transition-colors"
-                >
-                    <UserPlus size={16} />
-                </button>
+                <div className="flex gap-2">
+                    {!party && (
+                        <button
+                            onClick={createParty}
+                            className="text-slate-400 hover:text-purple-400 transition-colors"
+                            title="Create Party"
+                        >
+                            <Users size={16} />
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setShowAddInput(!showAddInput)}
+                        className="text-slate-400 hover:text-cyan-400 transition-colors"
+                        title="Add Friend"
+                    >
+                        <UserPlus size={16} />
+                    </button>
+                </div>
             </div>
 
             {showAddInput && (

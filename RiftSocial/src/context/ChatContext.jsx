@@ -9,6 +9,8 @@ export const ChatProvider = ({ children }) => {
     const [activeConversationId, setActiveConversationId] = useState(null);
     const [unreadCounts, setUnreadCounts] = useState({});
 
+    const [partyMessages, setPartyMessages] = useState([]);
+
     useEffect(() => {
         const handleMessage = (message) => {
             setConversations(prev => {
@@ -36,22 +38,6 @@ export const ChatProvider = ({ children }) => {
             setConversations(prev => {
                 const convId = message.recipientId;
                 const existing = prev[convId] || [];
-
-                // Replace optimistic message (identified by tempId or similar content/timestamp)
-                // For simplicity, we'll just filter out the optimistic one if we can identify it, 
-                // or just append if we assume the optimistic one had a different ID.
-                // But to avoid duplicates if we re-receive, we check ID.
-
-                // Better approach: Remove the optimistic message (which had senderId='me' and a local ID)
-                // and add the confirmed one.
-                // However, matching them is hard without a unique client-generated ID passed through.
-
-                // For now, let's just append and ensure we don't add duplicates by ID.
-                // And since optimistic ID != server ID, we might get duplicates.
-                // Let's NOT add the confirmed message if we already have an optimistic one?
-                // No, we want the real ID.
-
-                // Let's use a client-generated tempId.
                 return {
                     ...prev,
                     [convId]: existing.map(m =>
@@ -61,12 +47,21 @@ export const ChatProvider = ({ children }) => {
             });
         };
 
+        const handlePartyMessage = (message) => {
+            setPartyMessages(prev => {
+                if (prev.some(m => m.id === message.id)) return prev;
+                return [...prev, message];
+            });
+        };
+
         const unsubChat = subscribe('chat_message', handleMessage);
         const unsubSent = subscribe('message_sent', handleMessageSent);
+        const unsubParty = subscribe('party_chat', handlePartyMessage);
 
         return () => {
             unsubChat();
             unsubSent();
+            unsubParty();
         };
     }, [subscribe, activeConversationId]);
 
@@ -88,6 +83,11 @@ export const ChatProvider = ({ children }) => {
         }));
     };
 
+    const sendPartyMessage = (content) => {
+        const tempId = Date.now();
+        send('party_chat', { content, tempId });
+    };
+
     const openConversation = (id) => {
         setActiveConversationId(id);
         setUnreadCounts(prev => ({ ...prev, [id]: 0 }));
@@ -102,7 +102,9 @@ export const ChatProvider = ({ children }) => {
             conversations,
             activeConversationId,
             unreadCounts,
+            partyMessages,
             sendMessage,
+            sendPartyMessage,
             openConversation,
             closeConversation
         }}>

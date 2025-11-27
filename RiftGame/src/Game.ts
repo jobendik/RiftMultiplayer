@@ -12,6 +12,7 @@ import { Arena } from './world/Arena';
 import { InputManager, GameAction } from './core/InputManager';
 import { PostProcessing } from './core/PostProcessing';
 import { HUDManager } from './ui/HUDManager';
+import { KillfeedManager } from './ui/KillfeedManager';
 import { DamageTextSystem } from './ui/DamageTextSystem';
 import { StartScreen } from './ui/StartScreen';
 import { MobileControls } from './ui/MobileControls';
@@ -43,6 +44,7 @@ export class Game {
   public arena: Arena;
   public inputManager: InputManager;
   public hudManager: HUDManager;
+  public killfeedManager: KillfeedManager;
   public startScreen?: StartScreen;
   public mobileControls?: MobileControls;
 
@@ -151,6 +153,7 @@ export class Game {
     );
 
     this.hudManager = new HUDManager();
+    this.killfeedManager = new KillfeedManager();
     this.inputManager = new InputManager(CAMERA_CONFIG.mouseSensitivity);
     this.postProcessing = new PostProcessing(this.renderer, this.scene, this.camera);
 
@@ -371,9 +374,20 @@ export class Game {
     const quitBtn = document.getElementById('quit-btn');
     if (quitBtn) {
       quitBtn.addEventListener('click', () => {
-        location.reload();
+        this.returnToLobby();
       });
     }
+
+    const lobbyBtn = document.getElementById('lobby-btn');
+    if (lobbyBtn) {
+      lobbyBtn.addEventListener('click', () => {
+        this.returnToLobby();
+      });
+    }
+  }
+
+  private returnToLobby(): void {
+    window.location.href = 'http://localhost:5173';
   }
 
   private tryRequestPointerLock(): void {
@@ -446,11 +460,18 @@ export class Game {
         break;
 
       // Multiplayer Modes
-      case 'ffa':
       case 'tdm':
+        modeType = GameModeType.TEAM_DEATHMATCH;
+        break;
+
+      case 'ffa':
       case 'duel':
       case 'br':
       case 'ctf':
+        modeType = GameModeType.CAPTURE_THE_FLAG;
+        break;
+
+      case 'ffa':
       case 'horde':
       case 'koth':
       case 'elimination':

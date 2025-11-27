@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { setupMatchmaking } from './matchmakingHandler';
 import { setupGameHandler } from './gameHandler';
+import { partyManager } from '../managers/PartyManager';
 
 // Map to store userId -> socketId
 const userSockets = new Map<number, string>();
@@ -99,6 +100,31 @@ export const setupSocket = (io: Server) => {
 
             // Echo back to sender (for confirmation/optimistic update sync)
             socket.emit('message_sent', message);
+        });
+
+        socket.on('party_chat', (data) => {
+            const { content, tempId } = data;
+            const party = partyManager.getUserParty(userId);
+
+            if (!party) return;
+
+            const message = {
+                id: Date.now(),
+                senderId: userId,
+                senderName: `User ${userId}`, // Ideally fetch username
+                content,
+                timestamp: new Date().toISOString(),
+                tempId,
+                isParty: true
+            };
+
+            // Broadcast to all party members
+            party.members.forEach(member => {
+                const socketId = userSockets.get(member.userId);
+                if (socketId) {
+                    io.to(socketId).emit('party_chat', message);
+                }
+            });
         });
     });
 };

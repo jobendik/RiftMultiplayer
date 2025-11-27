@@ -573,4 +573,79 @@ export class HUDManager {
     }
     waitingEl.style.display = show ? 'block' : 'none';
   }
+
+  public showTeamScoreboard(show: boolean): void {
+    let teamScoreEl = document.getElementById('team-scores');
+    if (!teamScoreEl) {
+      teamScoreEl = document.createElement('div');
+      teamScoreEl.id = 'team-scores';
+      teamScoreEl.style.position = 'absolute';
+      teamScoreEl.style.top = '20px';
+      teamScoreEl.style.left = '50%';
+      teamScoreEl.style.transform = 'translateX(-50%)';
+      teamScoreEl.style.display = 'flex';
+      teamScoreEl.style.gap = '20px';
+      teamScoreEl.style.fontFamily = "'Orbitron', sans-serif";
+      teamScoreEl.style.fontSize = '32px';
+      teamScoreEl.style.fontWeight = 'bold';
+      teamScoreEl.style.zIndex = '90';
+      teamScoreEl.innerHTML = `
+        <div id="score-blue" style="color: #3b82f6; text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);">0</div>
+        <div style="color: #fff;">-</div>
+        <div id="score-red" style="color: #ef4444; text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);">0</div>
+      `;
+      document.body.appendChild(teamScoreEl);
+    }
+    teamScoreEl.style.display = show ? 'flex' : 'none';
+  }
+
+  public updateTeamScores(red: number, blue: number): void {
+    const redEl = document.getElementById('score-red');
+    const blueEl = document.getElementById('score-blue');
+    if (redEl) redEl.textContent = red.toString();
+    if (blueEl) blueEl.textContent = blue.toString();
+  }
+
+  public showFlagStatus(redStatus: string, blueStatus: string): void {
+    let flagStatusEl = document.getElementById('flag-status');
+    if (!flagStatusEl) {
+      flagStatusEl = document.createElement('div');
+      flagStatusEl.id = 'flag-status';
+      flagStatusEl.style.position = 'absolute';
+      flagStatusEl.style.top = '60px';
+      flagStatusEl.style.left = '50%';
+      flagStatusEl.style.transform = 'translateX(-50%)';
+      flagStatusEl.style.display = 'flex';
+      flagStatusEl.style.gap = '40px';
+      flagStatusEl.style.fontFamily = "'Orbitron', sans-serif";
+      flagStatusEl.style.fontSize = '18px';
+      flagStatusEl.style.fontWeight = 'bold';
+      flagStatusEl.style.zIndex = '90';
+      flagStatusEl.style.textShadow = '0 0 5px rgba(0,0,0,0.8)';
+      document.body.appendChild(flagStatusEl);
+    }
+
+    const getStatusColor = (status: string) => {
+      if (status === 'TAKEN') return '#ffaa00'; // Orange for danger
+      if (status === 'DROPPED') return '#ffff00'; // Yellow for caution
+      return '#ffffff'; // White for safe
+    };
+
+    flagStatusEl.innerHTML = `
+      <div style="color: #ef4444; display: flex; align-items: center; gap: 10px;">
+        <span>RED FLAG:</span>
+        <span style="color: ${getStatusColor(redStatus)}">${redStatus}</span>
+      </div>
+      <div style="color: #3b82f6; display: flex; align-items: center; gap: 10px;">
+        <span>BLUE FLAG:</span>
+        <span style="color: ${getStatusColor(blueStatus)}">${blueStatus}</span>
+      </div>
+    `;
+    flagStatusEl.style.display = 'flex';
+  }
+
+  public hideFlagStatus(): void {
+    const el = document.getElementById('flag-status');
+    if (el) el.style.display = 'none';
+  }
 }

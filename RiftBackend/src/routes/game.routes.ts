@@ -41,7 +41,16 @@ router.get('/loadout', checkAuth, async (req: Request, res: Response) => {
                 }
             });
         } else {
-            res.status(404).json({ message: 'User not found' });
+            // Fallback for guest/dev users who don't exist in DB yet
+            console.log(`User ${userId} not found, returning default loadout`);
+            res.json({
+                currency: { riftTokens: 0, plasmaCredits: 0 },
+                inventory: [],
+                equipped: {
+                    primary: 'AK47',
+                    secondary: 'Pistol'
+                }
+            });
         }
     } catch (error) {
         console.error('Loadout error:', error);
