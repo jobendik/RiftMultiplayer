@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
-import prisma from '../prisma';
+import { setupMatchmaking } from './matchmakingHandler';
+import { setupGameHandler } from './gameHandler';
 
 // Map to store userId -> socketId
 const userSockets = new Map<number, string>();
@@ -24,6 +25,12 @@ export const setupSocket = (io: Server) => {
 
         // Register user socket
         userSockets.set(userId, socket.id);
+
+        // Initialize Matchmaking
+        setupMatchmaking(io, socket);
+
+        // Initialize Game Networking
+        setupGameHandler(io, socket);
 
         // Broadcast presence update
         socket.broadcast.emit('presence_update', {

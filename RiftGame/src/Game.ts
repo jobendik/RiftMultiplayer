@@ -20,6 +20,7 @@ import { GameState } from './types';
 import { PLAYER_CONFIG, CAMERA_CONFIG, WEAPON_CONFIG } from './config/gameConfig';
 import { DamageType } from './core/DamageTypes';
 import { BackendConnector } from './managers/BackendConnector';
+import { NetworkManager } from './managers/NetworkManager';
 
 export class Game {
   private scene: THREE.Scene;
@@ -46,6 +47,7 @@ export class Game {
 
   private isMobile: boolean;
   private backendConnector: BackendConnector;
+  private networkManager: NetworkManager;
 
   private gameState: GameState;
   private lastTime = 0;
@@ -159,16 +161,16 @@ export class Game {
     });
 
     // Initialize mobile controls if on mobile device
-    this.isMobile = MobileControls.isMobileDevice();
+    this.isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (this.isMobile) {
       this.mobileControls = new MobileControls();
-      console.log('Mobile controls initialized');
     }
 
-    // Hide HUD initially for start screen
-    this.hudManager.hideHUD();
+    this.setupScene();
+    this.setupEventListeners();
 
-    // Initialize game state
+    this.networkManager = new NetworkManager(this);
+
     this.gameState = {
       running: false,
       paused: false,
@@ -183,10 +185,11 @@ export class Game {
       inStartScreen: true,
     };
 
-    this.setupScene();
-    this.setupEventListeners();
-
     console.log('Game initialized successfully');
+  }
+
+  public getScene(): THREE.Scene {
+    return this.scene;
   }
 
   private setupScene(): void {
@@ -738,7 +741,6 @@ export class Game {
         const distance = 3;
         const ringPos = landPos.clone().add(new THREE.Vector3(
           Math.cos(angle) * distance,
-          0.5,
           Math.sin(angle) * distance
         ));
         this.particleSystem.spawn(ringPos, 0xffff00, 20);
@@ -784,16 +786,14 @@ export class Game {
       this.mobileControls.update();
 
       // Convert 2D mobile input (x, y) -> 3D world input (x, 0, z)
-      // Convert 2D mobile input (x, y) -> 3D world input (x, 0, z)
-      // Invert Y because joystick up should move player forward (negative Z in world space)
       inputDir = new THREE.Vector3(
         this.mobileControls.movementInput.x,
         0,
         -this.mobileControls.movementInput.y
       );
-      wantsToSprint = inputDir.length() > 0.5; // Sprint when moving joystick far
+      wantsToSprint = inputDir.length() > 0.5;
       wantsJump = this.mobileControls.jumpPressed;
-      wantsCrouch = false; // No crouch on mobile for now
+      wantsCrouch = false;
       canCutJump = !this.mobileControls.jumpPressed && this.player.canCutJump;
       isFiring = this.mobileControls.firePressed;
 
@@ -809,8 +809,8 @@ export class Game {
         this.mobileControls.weaponSwitchRequested = 0;
       }
 
-      // Update player rotation from mobile touch (apply multiplier for responsiveness)
-      const mobileLookMultiplier = 1.8; // make touch look feel snappier
+      // Update player rotation from mobile touch
+      const mobileLookMultiplier = 1.8;
       this.player.rotation.y -= this.mobileControls.lookDelta.x * mobileLookMultiplier;
       this.player.rotation.x -= this.mobileControls.lookDelta.y * mobileLookMultiplier;
       this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
@@ -836,6 +836,15 @@ export class Game {
       this.inputManager.resetMouseDelta();
     }
 
+    // Dead check
+    if (this.player.isDead()) {
+      inputDir = new THREE.Vector3(0, 0, 0);
+      wantsToSprint = false;
+      wantsJump = false;
+      wantsCrouch = false;
+      isFiring = false;
+    }
+
     // Update player
     this.player.update(delta, inputDir, wantsToSprint, wantsJump, wantsCrouch, canCutJump, this.arena.arenaObjects);
     this.player.updatePowerups(delta);
@@ -853,12 +862,19 @@ export class Game {
         this.gameState.shotsFired++;
         const muzzlePosition = this.weaponSystem.getMuzzleWorldPosition();
 
+        // Network: Send shoot event
+        this.networkManager.sendShoot(
+          this.camera.position.clone(),
+          direction,
+          this.weaponSystem.currentWeaponType
+        );
+
         // Handle shotgun pellets or single shot
         if (directions && directions.length > 1) {
           // Shotgun - fire multiple pellets
           directions.forEach(dir => this.handleShooting(dir, true));
 
-          // Create tracer lines for all pellets (visual spray pattern)
+          // Create tracer lines for all pellets
           const impacts: THREE.Vector3[] = [];
           directions.forEach(dir => {
             const ray = new THREE.Raycaster(muzzlePosition, dir);
@@ -869,12 +885,10 @@ export class Game {
             if (intersects.length > 0) {
               impacts.push(intersects[0].point);
             } else {
-              // Tracer to sky
               impacts.push(muzzlePosition.clone().add(dir.clone().multiplyScalar(50)));
             }
           });
 
-          // Show pellet spread with tracers (weapon-specific color)
           if (impacts.length > 0) {
             const tracerProps = this.getTracerProperties();
             this.bulletTracerSystem.createMultipleTracers(muzzlePosition, impacts, tracerProps.color, tracerProps.useFireTexture);
@@ -886,7 +900,7 @@ export class Game {
       }
     }
 
-    // Update weapon: feed mouse movement or mobile look delta for sway/effects
+    // Update weapon
     let mouseMovement = { x: this.inputManager.mouse.deltaX, y: this.inputManager.mouse.deltaY };
     if (this.isMobile && this.mobileControls) {
       mouseMovement = { x: this.mobileControls.lookDelta.x, y: this.mobileControls.lookDelta.y };
@@ -931,7 +945,7 @@ export class Game {
       this.weaponSystem.cameraShake.intensity = Math.max(this.weaponSystem.cameraShake.intensity, 0.05);
 
       if (this.player.isDead()) {
-        this.gameOver();
+        this.handleDeath();
       }
     });
 
@@ -981,12 +995,57 @@ export class Game {
     }
 
     this.updateHUD();
+
+    if (this.inputManager.isKeyPressed('KeyR')) {
+      this.weaponSystem.reload();
+    }
+
+    // Scoreboard Toggle (TAB)
+    if (this.inputManager.isKeyPressed('Tab')) {
+      this.hudManager.toggleScoreboard(true);
+    } else {
+      this.hudManager.toggleScoreboard(false);
+    }
   }
 
   private handleShooting(direction: THREE.Vector3, isPellet: boolean = false): void {
     const raycaster = new THREE.Raycaster(this.camera.position.clone(), direction);
     let hitEnemy = false;
     const muzzlePosition = this.weaponSystem.getMuzzleWorldPosition();
+
+    // Check Remote Players
+    const remotePlayers = this.networkManager.getRemotePlayers();
+    remotePlayers.forEach((remotePlayer) => {
+      const intersects = raycaster.intersectObject(remotePlayer.mesh, true);
+      if (intersects.length > 0) {
+        hitEnemy = true; // Count as hit for stats
+        const hitPoint = intersects[0].point;
+        this.gameState.shotsHit++;
+
+        // Calculate damage
+        const weaponConfig = WEAPON_CONFIG[this.weaponSystem.currentWeaponType];
+        let damage = weaponConfig.damage;
+
+        // Distance falloff
+        const dist = this.player.position.distanceTo(remotePlayer.mesh.position);
+        if (weaponConfig.falloff) {
+          const { startDistance, endDistance, minDamage } = weaponConfig.falloff;
+          if (dist > startDistance) {
+            const t = Math.min(1, (dist - startDistance) / (endDistance - startDistance));
+            damage = damage * (1 - t) + minDamage * t;
+          }
+        }
+
+        this.networkManager.sendPlayerHit(remotePlayer.userId, damage, hitPoint);
+
+        // Visuals
+        this.damageTextSystem.spawn(hitPoint, damage, false);
+        if (!isPellet) {
+          this.impactSystem.playBodyImpact(hitPoint);
+          this.impactSystem.playHitConfirmation();
+        }
+      }
+    });
 
     this.enemyManager.getEnemies().forEach((enemy) => {
       const headBox = new THREE.Box3().setFromObject(enemy.head);
@@ -1369,10 +1428,125 @@ export class Game {
     this.gameTime += delta;
 
     this.update(delta);
+    this.networkManager.update(delta, this.player, this.camera);
     this.postProcessing.render();
   };
 
   private createExplosion(position: THREE.Vector3, radius: number, maxDamage: number): void {
     this.explosionSystem.createExplosion(position, radius, maxDamage);
+  }
+  public handleRemoteDamage(data: any) {
+    const { damage, attackerId } = data;
+    this.player.takeDamage({
+      amount: damage,
+      type: DamageType.Bullet,
+      instigator: null
+    });
+
+    // Directional indicator (simplified for now)
+    this.hudManager.showDamageVignette(damage, PLAYER_CONFIG.maxHealth, 0);
+    this.weaponSystem.cameraShake.intensity = Math.max(this.weaponSystem.cameraShake.intensity, 0.05);
+
+    if (this.player.isDead()) {
+      this.handleDeath();
+      // Notify server of death
+      this.networkManager.sendPlayerDied(attackerId, 'rifle'); // TODO: Pass actual weapon type if available
+    }
+  }
+
+  public handleScoreUpdate(scores: any) {
+    this.hudManager.updateScoreboard(scores, this.networkManager.myUserId);
+  }
+
+  public handleKillFeed(attackerId: string, victimId: string, weaponType: string) {
+    const isMe = attackerId === this.networkManager.myUserId;
+    const isVictim = victimId === this.networkManager.myUserId;
+
+    const attackerName = isMe ? 'YOU' : `Player ${attackerId.substr(0, 4)}`;
+    const victimName = isVictim ? 'YOU' : `Player ${victimId.substr(0, 4)}`;
+
+    this.hudManager.addKillFeed(
+      attackerName,
+      victimName,
+      weaponType,
+      false, // headshot (unknown for now)
+      false // multikill (unknown for now)
+    );
+
+    if (isMe) {
+      this.hudManager.showKillIcon();
+      this.impactSystem.playHitConfirmation(); // Or specific kill sound
+      this.gameState.kills++;
+      this.gameState.score += 100;
+    }
+  }
+
+  public handleMatchEnd(_finalState: any) {
+    this.tryExitPointerLock();
+    this.hudManager.showGameOver({
+      wave: this.gameState.wave,
+      kills: this.gameState.kills,
+      accuracy: 0,
+      time: "MATCH ENDED",
+      score: this.gameState.score
+    });
+
+    const gameOverTitle = document.querySelector('#game-over h1');
+    if (gameOverTitle) gameOverTitle.textContent = "MATCH COMPLETE";
+
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) {
+      restartBtn.style.display = 'block';
+      restartBtn.textContent = "RETURN TO LOBBY";
+      restartBtn.onclick = () => {
+        window.location.href = '/';
+      };
+    }
+  }
+
+
+  private handleDeath(): void {
+    // Disable controls
+    this.tryExitPointerLock();
+
+    // Show UI
+    this.hudManager.showGameOver({
+      wave: this.gameState.wave,
+      kills: this.gameState.kills,
+      accuracy: 0,
+      time: "0:00",
+      score: this.gameState.score
+    });
+
+    // Override game over text
+    const gameOverTitle = document.querySelector('#game-over h1');
+    if (gameOverTitle) gameOverTitle.textContent = "YOU DIED";
+
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) restartBtn.style.display = 'none';
+
+    // Respawn timer
+    let countdown = 3;
+    const interval = setInterval(() => {
+      if (gameOverTitle) gameOverTitle.textContent = `RESPAWNING IN ${countdown}...`;
+      countdown--;
+      if (countdown < 0) {
+        clearInterval(interval);
+        this.respawn();
+      }
+    }, 1000);
+  }
+
+  private respawn(): void {
+    this.player.reset();
+    this.hudManager.hideGameOver();
+    this.tryRequestPointerLock();
+    this.networkManager.sendPlayerRespawn();
+
+    // Reset UI text
+    const gameOverTitle = document.querySelector('#game-over h1');
+    if (gameOverTitle) gameOverTitle.textContent = "GAME OVER";
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) restartBtn.style.display = 'block';
   }
 }

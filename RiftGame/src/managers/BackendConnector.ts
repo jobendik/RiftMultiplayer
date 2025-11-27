@@ -10,6 +10,11 @@ export interface Loadout {
         riftTokens: number;
         plasmaCredits: number;
     };
+    inventory: Array<{
+        itemId: string;
+        type: string;
+        quantity: number;
+    }>;
     equipped: {
         primary: string;
         secondary: string;

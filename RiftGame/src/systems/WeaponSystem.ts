@@ -56,7 +56,7 @@ export class WeaponSystem {
   private cockSound: THREE.Audio;
   private zoomSound: THREE.Audio;
   private tailSound: THREE.Audio;
-  
+
   // Textures
   private muzzleTexture?: THREE.Texture;
 
@@ -100,7 +100,7 @@ export class WeaponSystem {
     // Create muzzle effects with initial weapon's position
     const initialConfig = WEAPON_CONFIG[this.currentWeaponType];
     const initialPos = initialConfig.muzzle.position;
-    
+
     // Use sprite for muzzle flash with texture - larger and more visible
     const spriteMat = new THREE.SpriteMaterial({
       map: this.muzzleTexture || null,
@@ -156,7 +156,7 @@ export class WeaponSystem {
 
   private loadTextures(): void {
     const textureLoader = new THREE.TextureLoader();
-    
+
     textureLoader.load(
       'assets/images/muzzle.png_19188667.png',
       (texture) => {
@@ -228,7 +228,7 @@ export class WeaponSystem {
 
     this.isZoomed = zoomed;
     this.weaponGroup.visible = !zoomed; // Hide weapon when zoomed
-    
+
     // Play zoom sound
     const config = WEAPON_CONFIG[this.currentWeaponType];
     if (config.audio.zoom && this.audioBuffers[config.audio.zoom]) {
@@ -239,6 +239,28 @@ export class WeaponSystem {
     }
 
     return true;
+  }
+
+  public reload(): void {
+    if (this.isReloading || this.currentMag === this.reserveAmmo) return;
+
+    const config = WEAPON_CONFIG[this.currentWeaponType];
+
+    // Play reload sound
+    if (config.audio.reload && this.audioBuffers[config.audio.reload]) {
+      if (this.reloadSound.isPlaying) this.reloadSound.stop();
+      this.reloadSound.setBuffer(this.audioBuffers[config.audio.reload]);
+      this.reloadSound.setVolume(0.5);
+      this.reloadSound.play();
+    }
+
+    this.isReloading = true;
+    this.reloadTimer = config.reloadTime;
+
+    // Unzoom if reloading
+    if (this.isZoomed) {
+      this.setZoom(false);
+    }
   }
 
   private resetWeaponState(): void {
@@ -258,7 +280,7 @@ export class WeaponSystem {
 
     // Create new model
     this.weaponGroup = this.createWeaponModel();
-    
+
     // Re-add muzzle effects
     this.weaponGroup.add(this.muzzleFlash);
     this.weaponGroup.add(this.muzzleFlash2);
@@ -266,18 +288,18 @@ export class WeaponSystem {
 
     // Add to camera
     (this.camera as any).add(this.weaponGroup);
-    
+
     // Update muzzle light color/range/position based on new weapon
     const config = WEAPON_CONFIG[this.currentWeaponType];
     this.muzzleLight.color.setHex(config.muzzle.lightColor);
     this.muzzleLight.distance = config.muzzle.lightRange;
-    
+
     // Update muzzle flash positions for this weapon
     const pos = config.muzzle.position;
     this.muzzleFlash.position.set(pos.x, pos.y, pos.z);
     this.muzzleFlash2.position.set(pos.x, pos.y, pos.z - 0.02);
     this.muzzleLight.position.copy(this.muzzleFlash.position);
-  }  public get currentMag(): number {
+  } public get currentMag(): number {
     return this.weapons[this.currentWeaponType].mag;
   }
 
@@ -311,7 +333,7 @@ export class WeaponSystem {
 
   private createAK47Model(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.12, 0.6),
@@ -352,7 +374,7 @@ export class WeaponSystem {
 
   private createAWPModel(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Green Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.1, 0.15, 0.8),
@@ -385,7 +407,7 @@ export class WeaponSystem {
 
   private createLMGModel(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Bulky Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.15, 0.2, 0.7),
@@ -417,7 +439,7 @@ export class WeaponSystem {
 
   private createM4Model(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.12, 0.5),
@@ -448,7 +470,7 @@ export class WeaponSystem {
 
   private createPistolModel(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Slide
     const slide = new THREE.Mesh(
       new THREE.BoxGeometry(0.06, 0.08, 0.25),
@@ -472,7 +494,7 @@ export class WeaponSystem {
 
   private createScarModel(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Tan Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.1, 0.15, 0.6),
@@ -503,7 +525,7 @@ export class WeaponSystem {
 
   private createShotgunModel(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.1, 0.12, 0.5),
@@ -535,7 +557,7 @@ export class WeaponSystem {
 
   private createSniperModel(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.1, 0.7),
@@ -568,7 +590,7 @@ export class WeaponSystem {
 
   private createTec9Model(): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Body
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.06, 0.08, 0.3),
@@ -662,7 +684,7 @@ export class WeaponSystem {
     // Calculate shot direction(s) - shotguns fire multiple pellets
     const pelletCount = config.pelletCount || 1;
     const directions: THREE.Vector3[] = [];
-    
+
     for (let i = 0; i < pelletCount; i++) {
       const dir = this.calculateShotDirection(camera, playerOnGround, playerIsSprinting, playerVelocity);
       directions.push(dir);
@@ -700,10 +722,10 @@ export class WeaponSystem {
 
     this.shotsFiredInBurst++;
 
-    return { 
-      direction: directions[0], 
+    return {
+      direction: directions[0],
       shotFired: true,
-      directions: pelletCount > 1 ? directions : undefined 
+      directions: pelletCount > 1 ? directions : undefined
     };
   }
 
@@ -793,13 +815,13 @@ export class WeaponSystem {
     const scale = cfg.flashScale.min + Math.random() * (cfg.flashScale.max - cfg.flashScale.min);
     this.muzzleFlash.scale.set(scale * 1.0, scale * 1.0, 1); // Doubled from 0.5
     const flashMat = this.muzzleFlash.material as THREE.SpriteMaterial;
-    
+
     // Update texture if loaded
     if (this.muzzleTexture && !flashMat.map) {
       flashMat.map = this.muzzleTexture;
       flashMat.needsUpdate = true;
     }
-    
+
     flashMat.color.setHex(cfg.lightColor);
     flashMat.opacity = 1.2; // Exaggerated brightness
     flashMat.rotation = Math.random() * Math.PI * 2;
@@ -834,7 +856,7 @@ export class WeaponSystem {
   private spawnSmoke(): void {
     const muzzlePos = this.getMuzzleWorldPosition();
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
-    
+
     this.particleSystem.spawnMuzzleSmoke(muzzlePos, dir);
   }
 
@@ -1001,7 +1023,7 @@ export class WeaponSystem {
         (this.muzzleFlash.material as THREE.SpriteMaterial).opacity = ratio * 1.2;
         (this.muzzleFlash2.material as THREE.SpriteMaterial).opacity = ratio * 0.9;
         this.muzzleLight.intensity = ratio * config.muzzle.lightIntensity;
-        
+
         // Rotate slightly during flash
         this.muzzleFlash.material.rotation += delta * 10;
         this.muzzleFlash2.material.rotation -= delta * 10;
@@ -1046,7 +1068,7 @@ export class WeaponSystem {
     }
     // Ease out cubic
     switchOffset = 1 - Math.pow(1 - switchOffset, 3);
-    
+
     targetY -= switchOffset * 0.3; // Dip down
     let targetRotX = -this.weaponKickRotX + (cfg.reloadRotX * this.reloadBlend) + (switchOffset * Math.PI / 6); // Rotate down
 
@@ -1068,11 +1090,11 @@ export class WeaponSystem {
   public getMuzzleWorldPosition(): THREE.Vector3 {
     // Update the weapon group's world matrix to get accurate positions
     this.weaponGroup.updateMatrixWorld(true);
-    
+
     // Get the world position of the muzzle flash (which has weapon-specific offset)
     const worldPos = new THREE.Vector3();
     this.muzzleFlash.getWorldPosition(worldPos);
-    
+
     return worldPos;
   }
 

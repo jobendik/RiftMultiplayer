@@ -155,6 +155,19 @@
       MOUSE - Aim | LEFT CLICK - Shoot | R - Reload
     </div>
   </div>
+
+  <!-- Vignette/Damage Overlay System -->
+  <div id="damage-overlay"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100;"></div>
+  <div id="vignette-impact-flash"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(ellipse at center, transparent 20%, rgba(255, 0, 0, 0.8) 100%); opacity: 0; pointer-events: none; z-index: 101; transition: opacity 0.12s;">
+  </div>
+  <div id="vignette-damage-pulse"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; z-index: 102; transition: opacity 0.3s;">
+  </div>
+  <div id="vignette-critical"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(ellipse at center, transparent 30%, rgba(139, 0, 0, 0.4) 100%); opacity: 0; pointer-events: none; z-index: 103; transition: opacity 0.5s;">
+  </div>
 </body>
 
 </html>

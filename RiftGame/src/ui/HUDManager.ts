@@ -515,4 +515,41 @@ export class HUDManager {
     // Reset wave tracker so first wave animation shows
     this.currentWave = 0;
   }
+
+  public updateScoreboard(scores: any, myUserId: string) {
+    const tbody = document.getElementById('scoreboard-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = ''; // Clear existing
+
+    // Convert players object to array and sort by kills
+    const players = Object.entries(scores.players).map(([id, stats]: [string, any]) => ({
+      id,
+      ...stats
+    })).sort((a: any, b: any) => b.kills - a.kills);
+
+    players.forEach((p: any) => {
+      const tr = document.createElement('tr');
+      if (p.id === myUserId) {
+        tr.classList.add('local-player');
+      }
+
+      const name = p.id === myUserId ? 'YOU' : `Player ${p.id.substr(0, 4)}`;
+
+      tr.innerHTML = `
+                <td>${name}</td>
+                <td>${p.kills}</td>
+                <td>${p.deaths}</td>
+                <td>${p.ping || 0}ms</td>
+            `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  public toggleScoreboard(visible: boolean) {
+    const scoreboard = document.getElementById('scoreboard');
+    if (scoreboard) {
+      scoreboard.style.display = visible ? 'block' : 'none';
+    }
+  }
 }

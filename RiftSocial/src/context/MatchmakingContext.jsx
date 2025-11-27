@@ -30,15 +30,8 @@ export const MatchmakingProvider = ({ children }) => {
 
     const startQueue = (modeId) => {
         setIsQueued(true);
+        setMatchFound(null);
         send('start_queue', { modeId });
-
-        // Simulate match found after random time
-        setTimeout(() => {
-            if (isQueued) { // Check if still queued
-                // This would normally come from the server via websocket
-                // but we simulate it here for the demo if the server doesn't respond
-            }
-        }, 5000);
     };
 
     const cancelQueue = () => {

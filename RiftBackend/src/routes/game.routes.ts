@@ -24,12 +24,16 @@ router.get('/loadout', checkAuth, async (req: Request, res: Response) => {
     try {
         const user = await prisma.user.findUnique({
             where: { id: userId },
-            include: { currency: true }
+            include: {
+                currency: true,
+                inventory: true
+            }
         });
 
         if (user) {
             res.json({
                 currency: user.currency,
+                inventory: user.inventory,
                 // In a real game, this would return equipped items from a Loadout model
                 equipped: {
                     primary: 'AK47',
