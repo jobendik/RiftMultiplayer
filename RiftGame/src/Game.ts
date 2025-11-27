@@ -21,6 +21,7 @@ import { PLAYER_CONFIG, CAMERA_CONFIG, WEAPON_CONFIG } from './config/gameConfig
 import { DamageType } from './core/DamageTypes';
 import { BackendConnector } from './managers/BackendConnector';
 import { NetworkManager } from './managers/NetworkManager';
+import { GameModeManager, GameModeType } from './managers/GameModeManager';
 
 export class Game {
   private scene: THREE.Scene;
@@ -28,28 +29,29 @@ export class Game {
   private renderer: THREE.WebGLRenderer;
   private postProcessing: PostProcessing;
 
-  private player: Player;
-  private weaponSystem: WeaponSystem;
-  private enemyManager: EnemyManager;
-  private particleSystem: ParticleSystem;
-  private pickupSystem: PickupSystem;
-  private impactSystem: ImpactSystem;
-  private decalSystem: DecalSystem;
-  private bulletTracerSystem: BulletTracerSystem;
-  private projectileSystem: ProjectileSystem;
-  private explosionSystem: ExplosionSystem;
-  private damageTextSystem: DamageTextSystem;
-  private arena: Arena;
-  private inputManager: InputManager;
-  private hudManager: HUDManager;
-  private startScreen?: StartScreen;
-  private mobileControls?: MobileControls;
+  public player: Player;
+  public weaponSystem: WeaponSystem;
+  public enemyManager: EnemyManager;
+  public particleSystem: ParticleSystem;
+  public pickupSystem: PickupSystem;
+  public impactSystem: ImpactSystem;
+  public decalSystem: DecalSystem;
+  public bulletTracerSystem: BulletTracerSystem;
+  public projectileSystem: ProjectileSystem;
+  public explosionSystem: ExplosionSystem;
+  public damageTextSystem: DamageTextSystem;
+  public arena: Arena;
+  public inputManager: InputManager;
+  public hudManager: HUDManager;
+  public startScreen?: StartScreen;
+  public mobileControls?: MobileControls;
 
-  private isMobile: boolean;
-  private backendConnector: BackendConnector;
-  private networkManager: NetworkManager;
+  public isMobile: boolean;
+  public backendConnector: BackendConnector;
+  public networkManager: NetworkManager;
+  public gameModeManager: GameModeManager;
 
-  private gameState: GameState;
+  public gameState: GameState;
   private lastTime = 0;
   private gameTime = 0;
   private pointLights: { light: THREE.PointLight; baseIntensity: number; phase: number }[] = [];
@@ -170,6 +172,7 @@ export class Game {
     this.setupEventListeners();
 
     this.networkManager = new NetworkManager(this);
+    this.gameModeManager = new GameModeManager(this);
 
     this.gameState = {
       running: false,
@@ -357,6 +360,20 @@ export class Game {
         this.tryRequestPointerLock();
       }
     });
+
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) {
+      restartBtn.addEventListener('click', () => {
+        location.reload();
+      });
+    }
+
+    const quitBtn = document.getElementById('quit-btn');
+    if (quitBtn) {
+      quitBtn.addEventListener('click', () => {
+        location.reload();
+      });
+    }
   }
 
   private tryRequestPointerLock(): void {
@@ -403,7 +420,63 @@ export class Game {
     }
   }
 
-  private startGame(): void {
+  public startGame(): void {
+    // Determine game mode from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const modeParam = urlParams.get('mode') || 'arena-classic';
+
+    let modeType = GameModeType.SINGLE_PLAYER_WAVE;
+
+    // Map RiftSocial IDs to GameModeTypes
+    switch (modeParam) {
+      // Single Player Modes
+      case 'arena-classic':
+      case 'arena-waves':
+      case 'arena-time':
+      case 'arena-rotating':
+      case 'arena-chaos':
+      case 'arena-gauntlet':
+      case 'arena-weapon':
+      case 'arena-combo':
+      case 'arena-precision':
+      case 'target':
+      case 'time-trial':
+      case 'score-attack':
+        modeType = GameModeType.SINGLE_PLAYER_WAVE;
+        break;
+
+      // Multiplayer Modes
+      case 'ffa':
+      case 'tdm':
+      case 'duel':
+      case 'br':
+      case 'ctf':
+      case 'horde':
+      case 'koth':
+      case 'elimination':
+      case 'domination':
+      case 'hardpoint':
+      case 'gun-game':
+      case 'infection':
+      case 'juggernaut':
+      case 'assassin':
+      case 'payload':
+      case 'extraction':
+      case 'demolition':
+      case 'heist':
+      case 'one-chamber':
+      case 'instagib':
+      case 'dodgeball':
+      case 'boss-rush':
+        modeType = GameModeType.MULTIPLAYER_DEATHMATCH;
+        break;
+
+      default:
+        console.warn(`Unknown mode '${modeParam}', defaulting to Single Player Wave`);
+        modeType = GameModeType.SINGLE_PLAYER_WAVE;
+    }
+
+    console.log(`Starting game in mode: ${modeType} (requested: ${modeParam})`);
     // Stop start screen
     if (this.startScreen) {
       this.startScreen.stop();
@@ -458,7 +531,7 @@ export class Game {
     this.hudManager.reset();
 
     // Spawn initial pickups (but don't show HUD yet)
-    this.pickupSystem.spawnWavePickups(this.player.health, PLAYER_CONFIG.maxHealth, this.gameState.wave);
+    // this.pickupSystem.spawnWavePickups(this.player.health, PLAYER_CONFIG.maxHealth, this.gameState.wave);
 
     // DON'T update HUD yet - wait until after intro lands
     // this.updateHUD();
@@ -478,16 +551,14 @@ export class Game {
     if (this.respawnSound && this.respawnSound.buffer) {
       this.respawnSound.play();
     }
+
+    // Set game mode
+    this.gameModeManager.setMode(modeType);
+
     this.animate();
   }
 
-  private startWave(): void {
-    this.gameState.waveInProgress = true;
-    this.gameState.betweenWaves = false;
-    this.enemyManager.spawnWave(this.gameState.wave);
-    // Wave announcement handled by updateWave() in updateHUD() with animation
-    this.updateHUD();
-  }
+  // Wave logic moved to SinglePlayerWaveMode
 
   /**
    * Get weapon-specific tracer color and texture preference
@@ -519,19 +590,7 @@ export class Game {
     }
   }
 
-  private waveComplete(): void {
-    this.gameState.waveInProgress = false;
-    this.gameState.betweenWaves = true;
-    this.gameState.score += this.gameState.wave * 500;
-
-    this.hudManager.showMessage('WAVE CLEARED');
-    this.pickupSystem.spawnWavePickups(this.player.health, PLAYER_CONFIG.maxHealth, this.gameState.wave);
-
-    setTimeout(() => {
-      this.gameState.wave++;
-      this.startWave();
-    }, 3000);
-  }
+  // Wave completion logic moved to SinglePlayerWaveMode
 
   private tryReload(): void {
     const reloadStarted = this.weaponSystem.tryReload(() => {
@@ -618,7 +677,7 @@ export class Game {
     });
   }
 
-  private updateHUD(): void {
+  public updateHUD(): void {
     const healthPercent = (this.player.health / PLAYER_CONFIG.maxHealth) * 100;
     this.hudManager.updateHealth(this.player.health, PLAYER_CONFIG.maxHealth);
     this.player.updateHeartbeat(healthPercent);
@@ -760,7 +819,7 @@ export class Game {
 
       // Enable pointer lock and start wave with slight delay for dramatic effect
       this.tryRequestPointerLock();
-      setTimeout(() => this.startWave(), 800);
+      // setTimeout(() => this.startWave(), 800); // Handled by GameMode
     }
   }
 
@@ -797,7 +856,8 @@ export class Game {
       canCutJump = !this.mobileControls.jumpPressed && this.player.canCutJump;
       isFiring = this.mobileControls.firePressed;
 
-      // Handle reload button
+      // Update Game Mode
+      this.gameModeManager.update(delta);
       if (this.mobileControls.reloadPressed) {
         this.tryReload();
       }
@@ -989,10 +1049,7 @@ export class Game {
       this.hudManager.showPowerup('', false);
     }
 
-    // Check wave completion
-    if (this.enemyManager.getEnemyCount() === 0 && this.gameState.waveInProgress) {
-      this.waveComplete();
-    }
+    // Check wave completion - Moved to SinglePlayerWaveMode
 
     this.updateHUD();
 
@@ -1547,6 +1604,7 @@ export class Game {
     const gameOverTitle = document.querySelector('#game-over h1');
     if (gameOverTitle) gameOverTitle.textContent = "GAME OVER";
     const restartBtn = document.getElementById('restart-btn');
-    if (restartBtn) restartBtn.style.display = 'block';
+    if (restartBtn) restartBtn.style.display = 'none';
   }
 }
+// Force rebuild

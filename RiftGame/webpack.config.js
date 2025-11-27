@@ -1,6 +1,24 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const fs = require('fs');
+
+// Read .env file manually
+const envPath = path.join(__dirname, '.env');
+const envVars = {
+  'process.env.VITE_LOBBY_URL': JSON.stringify('http://localhost:5173')
+};
+
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split('\n').forEach(line => {
+    const [key, value] = line.split('=');
+    if (key && value) {
+      envVars[`process.env.${key.trim()}`] = JSON.stringify(value.trim());
+    }
+  });
+}
 
 module.exports = {
   entry: './src/main.ts',
@@ -34,6 +52,7 @@ module.exports = {
         { from: 'assets', to: 'assets' },
       ],
     }),
+    new webpack.DefinePlugin(envVars),
   ],
   devServer: {
     static: {

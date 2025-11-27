@@ -27,6 +27,23 @@ export const AuthProvider = ({ children }) => {
         initAuth();
     }, [token]);
 
+    const register = async (email, username, password) => {
+        setIsLoading(true);
+        try {
+            const response = await api.register(email, username, password);
+            setToken(response.token);
+            setUser(response.user);
+            setIsAuthenticated(true);
+            localStorage.setItem('auth_token', response.token);
+            return true;
+        } catch (error) {
+            console.error('Registration failed', error);
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const login = async (email, password) => {
         setIsLoading(true);
         try {
@@ -52,7 +69,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, isAuthenticated, isLoading, token, login, logout }}>
+        <AuthContext.Provider value={{ user, isAuthenticated, isLoading, token, login, register, logout }}>
             {children}
         </AuthContext.Provider>
     );

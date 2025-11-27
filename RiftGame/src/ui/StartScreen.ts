@@ -4,6 +4,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { GlitchPass } from 'three/examples/jsm/postprocessing/GlitchPass.js';
 
+import { LOBBY_URL } from '../config/gameConfig';
+
 export class StartScreen {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -11,18 +13,21 @@ export class StartScreen {
   private composer: EffectComposer;
   private glitchPass: GlitchPass;
   private capMesh: THREE.Mesh;
+  private lobbyCapMesh: THREE.Mesh;
   private buttonGroup: THREE.Group;
+  private lobbyButtonGroup: THREE.Group;
   private textMeshes: THREE.Mesh[] = [];
   private textGroup?: THREE.Group;
   private gridHelper?: THREE.GridHelper;
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
-  private isHoveringButton = false;
+
+  private hoveredButton: 'start' | 'lobby' | null = null;
   private clock: THREE.Clock;
   private animationId?: number;
-  private onStartCallback?: () => void;
+  private onStartCallback?: (mode?: string) => void;
 
-  constructor(container: HTMLElement, onStart: () => void) {
+  constructor(container: HTMLElement, onStart: (mode?: string) => void) {
     this.onStartCallback = onStart;
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0x02000a, 0.02);
@@ -36,7 +41,7 @@ export class StartScreen {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
-    
+
     // Make canvas fill the entire screen
     this.renderer.domElement.style.position = 'fixed';
     this.renderer.domElement.style.top = '0';
@@ -44,8 +49,13 @@ export class StartScreen {
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
     this.renderer.domElement.style.zIndex = '1000';
-    
+
     container.appendChild(this.renderer.domElement);
+
+    // Initialize core properties early
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
+    this.clock = new THREE.Clock();
 
     // Post-Processing
     this.composer = new EffectComposer(this.renderer);
@@ -106,53 +116,96 @@ export class StartScreen {
     const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ color: 0x88aaff, size: 0.2 }));
     this.scene.add(stars);
 
-    // Button
-    this.buttonGroup = new THREE.Group();
-    this.scene.add(this.buttonGroup);
-    this.buttonGroup.position.set(0, -3.5, 8);
-    this.buttonGroup.rotation.x = 0.2;
+    // Check for mode in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasMode = urlParams.has('mode');
 
-    // Button Base
-    const baseGeo = new THREE.CylinderGeometry(3.5, 4, 1, 6);
-    const baseMat = new THREE.MeshStandardMaterial({
-      color: 0x222222,
-      roughness: 0.5,
-      metalness: 0.7
-    });
-    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-    baseMesh.position.y = -0.5;
-    this.buttonGroup.add(baseMesh);
+    if (hasMode) {
+      // Match Mode: Show "ENTER MATCH" button
+      const mode = urlParams.get('mode');
+      console.log('Match mode detected:', mode);
 
-    // Button Cap
-    const capGeo = new THREE.SphereGeometry(2.8, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-    const capMat = new THREE.MeshStandardMaterial({
-      color: 0xaa0000,
-      emissive: 0xff0000,
-      emissiveIntensity: 0.5,
-      roughness: 0.4,
-      metalness: 0.3,
-    });
-    this.capMesh = new THREE.Mesh(capGeo, capMat);
-    this.capMesh.scale.y = 0.5;
-    this.capMesh.position.y = 0.1;
-    this.capMesh.userData = { isButton: true };
-    this.buttonGroup.add(this.capMesh);
+      // ENTER MATCH Button (Yellow/Gold)
+      // Using a slightly different color scheme for distinction
+      const enterBtn = this.createButton(0xffaa00, 0x885500, "ENTER");
+      this.buttonGroup = enterBtn.group;
+      this.capMesh = enterBtn.cap;
 
-    // Warning Ring
-    const ringGeo = new THREE.TorusGeometry(3, 0.15, 16, 64);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-    ringMesh.rotation.x = Math.PI / 2;
-    ringMesh.position.y = 0.05;
-    this.buttonGroup.add(ringMesh);
+      // Center the button
+      this.buttonGroup.position.set(0, -3.5, 8);
+      this.buttonGroup.rotation.x = 0.2;
+      this.scene.add(this.buttonGroup);
 
-    // Text
-    this.loadText();
+      // Initialize dummy lobby mesh to prevent raycaster errors
+      this.lobbyButtonGroup = new THREE.Group();
+      this.lobbyCapMesh = new THREE.Mesh(); // Invisible, no geometry/material added to scene
 
-    // Interaction
-    this.raycaster = new THREE.Raycaster();
-    this.mouse = new THREE.Vector2();
-    this.clock = new THREE.Clock();
+      // Load "ENTER MATCH" Text
+      const loader = new THREE.FontLoader();
+      loader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', (font: THREE.Font) => {
+        const textGeo = new THREE.TextGeometry("ENTER MATCH", {
+          font: font,
+          size: 2.5,
+          height: 0.2,
+          curveSegments: 12,
+          bevelEnabled: true,
+          bevelThickness: 0.02,
+          bevelSize: 0.01,
+          bevelSegments: 3
+        });
+
+        textGeo.computeBoundingBox();
+        const width = textGeo.boundingBox!.max.x - textGeo.boundingBox!.min.x;
+
+        const textMat = new THREE.MeshStandardMaterial({
+          color: 0xffaa00,
+          emissive: 0xff4400,
+          emissiveIntensity: 0.8,
+          roughness: 0.3,
+          metalness: 0.8
+        });
+
+        const textMesh = new THREE.Mesh(textGeo, textMat);
+        textMesh.position.set(-width / 2, 2, 0); // Centered, above button
+        this.scene.add(textMesh);
+
+        // Add a light for the text
+        const textLight = new THREE.PointLight(0xffaa00, 1, 20);
+        textLight.position.set(0, 2, 5);
+        this.scene.add(textLight);
+      });
+
+      // Override click handler for this specific button
+      this.onStartCallback = () => {
+        if (onStart) {
+          onStart(mode || undefined);
+        }
+      };
+
+    } else {
+      // Standard Start Screen
+
+      // START Button (Right)
+      const startBtn = this.createButton(0xff0000, 0xaa0000, "START");
+      this.buttonGroup = startBtn.group;
+      this.capMesh = startBtn.cap;
+      this.buttonGroup.position.set(3.5, -3.5, 8);
+      this.buttonGroup.rotation.x = 0.2;
+      this.buttonGroup.rotation.z = -0.1;
+      this.scene.add(this.buttonGroup);
+
+      // LOBBY Button (Left)
+      const lobbyBtn = this.createButton(0x00ffff, 0x0088aa, "LOBBY");
+      this.lobbyButtonGroup = lobbyBtn.group;
+      this.lobbyCapMesh = lobbyBtn.cap;
+      this.lobbyButtonGroup.position.set(-3.5, -3.5, 8);
+      this.lobbyButtonGroup.rotation.x = 0.2;
+      this.lobbyButtonGroup.rotation.z = 0.1;
+      this.scene.add(this.lobbyButtonGroup);
+
+      // Load standard "RIFT" text
+      this.loadText();
+    }
 
     this.setupEventListeners();
   }
@@ -161,7 +214,7 @@ export class StartScreen {
     const loader = new THREE.FontLoader();
     const neonColors = [0x00ffff, 0xffaa00, 0x00ffff, 0xffaa00];
 
-    loader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', (font) => {
+    loader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', (font: THREE.Font) => {
       this.textGroup = new THREE.Group();
       this.scene.add(this.textGroup);
 
@@ -208,22 +261,67 @@ export class StartScreen {
       this.textGroup.position.x = -(box.max.x - box.min.x) / 2;
       this.textGroup.position.y = 2;
 
-      // BREACH Label
-      const breachGeo = new THREE.TextGeometry("START", {
+    });
+  }
+
+
+  private createButton(color: number, baseColor: number, text: string): { group: THREE.Group, cap: THREE.Mesh } {
+    const group = new THREE.Group();
+
+    // Button Base
+    const baseGeo = new THREE.CylinderGeometry(3.5, 4, 1, 6);
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x222222,
+      roughness: 0.5,
+      metalness: 0.7
+    });
+    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+    baseMesh.position.y = -0.5;
+    group.add(baseMesh);
+
+    // Button Cap
+    const capGeo = new THREE.SphereGeometry(2.8, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const capMat = new THREE.MeshStandardMaterial({
+      color: baseColor,
+      emissive: color,
+      emissiveIntensity: 0.5,
+      roughness: 0.4,
+      metalness: 0.3,
+    });
+    const capMesh = new THREE.Mesh(capGeo, capMat);
+    capMesh.scale.y = 0.5;
+    capMesh.position.y = 0.1;
+    capMesh.userData = { isButton: true };
+    group.add(capMesh);
+
+    // Ring
+    const ringGeo = new THREE.TorusGeometry(3, 0.15, 16, 64);
+    const ringMat = new THREE.MeshBasicMaterial({ color: color });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = Math.PI / 2;
+    ringMesh.position.y = 0.05;
+    group.add(ringMesh);
+
+    // Text Label
+    const loader = new THREE.FontLoader();
+    loader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', (font: THREE.Font) => {
+      const textGeo = new THREE.TextGeometry(text, {
         font: font,
         size: 0.8,
         height: 0.1,
         curveSegments: 5,
         bevelEnabled: false
       });
-      breachGeo.computeBoundingBox();
-      const bWidth = breachGeo.boundingBox!.max.x - breachGeo.boundingBox!.min.x;
-      const breachMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const breachMesh = new THREE.Mesh(breachGeo, breachMat);
-      breachMesh.position.set(-bWidth / 2, 0.5, 0.3);
-      breachMesh.rotation.x = -Math.PI / 2;
-      this.capMesh.add(breachMesh);
+      textGeo.computeBoundingBox();
+      const width = textGeo.boundingBox!.max.x - textGeo.boundingBox!.min.x;
+      const textMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const textMesh = new THREE.Mesh(textGeo, textMat);
+      textMesh.position.set(-width / 2, 0.5, 0.3);
+      textMesh.rotation.x = -Math.PI / 2;
+      capMesh.add(textMesh);
     });
+
+    return { group, cap: capMesh };
   }
 
   private setupEventListeners() {
@@ -233,18 +331,20 @@ export class StartScreen {
     };
 
     const onMouseDown = () => {
-      if (this.isHoveringButton) {
+      if (this.hoveredButton === 'start') {
         this.capMesh.position.y = -0.1;
-        setTimeout(() => {
-          if (this.onStartCallback) {
-            this.onStartCallback();
-          }
-        }, 100);
+        if (this.onStartCallback) {
+          this.onStartCallback();
+        }
+      } else if (this.hoveredButton === 'lobby') {
+        this.lobbyCapMesh.position.y = -0.1;
+        window.location.href = LOBBY_URL;
       }
     };
 
     const onMouseUp = () => {
       this.capMesh.position.y = 0.1;
+      this.lobbyCapMesh.position.y = 0.1;
     };
 
     const onResize = () => {
@@ -289,34 +389,72 @@ export class StartScreen {
     const t = this.clock.getElapsedTime();
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const intersects = this.raycaster.intersectObjects([this.capMesh], false);
-    const wasHovering = this.isHoveringButton;
-    this.isHoveringButton = intersects.length > 0;
 
-    if (this.isHoveringButton !== wasHovering) {
-      document.body.className = this.isHoveringButton ? 'hovering' : '';
+    // Check Start Button
+    const startIntersects = this.raycaster.intersectObjects([this.capMesh], false);
+    const lobbyIntersects = this.raycaster.intersectObjects([this.lobbyCapMesh], false);
+
+    const wasHovering = this.hoveredButton;
+
+    if (startIntersects.length > 0) {
+      this.hoveredButton = 'start';
+    } else if (lobbyIntersects.length > 0) {
+      this.hoveredButton = 'lobby';
+    } else {
+      this.hoveredButton = null;
     }
 
+    if (this.hoveredButton !== wasHovering) {
+      document.body.className = this.hoveredButton ? 'hovering' : '';
+    }
+
+    // Animate Start Button
     const capMat = this.capMesh.material as THREE.MeshStandardMaterial;
+    if (capMat && capMat.emissive) {
+      if (this.hoveredButton === 'start') {
+        const hoverPulse = Math.sin(t * 10) * 0.25 + 0.5;
+        capMat.emissive.setHex(0xff3333);
+        capMat.emissiveIntensity = 1.5 + hoverPulse * 0.5;
+        this.buttonGroup.scale.setScalar(1.05);
+      } else {
+        this.buttonGroup.scale.setScalar(1.0);
+        const pulse = Math.sin(t * 3) * 0.5 + 0.5;
+        capMat.emissive.setHex(0xff0000);
+        capMat.emissiveIntensity = 0.3 + (pulse * 0.3);
+        // Rotate ring
+        if (this.buttonGroup.children[2]) {
+          const ringMesh = this.buttonGroup.children[2] as THREE.Mesh;
+          ringMesh.rotation.z = t * 0.5;
+        }
+      }
+    }
 
-    if (this.isHoveringButton) {
+    // Animate Lobby Button
+    const lobbyMat = this.lobbyCapMesh.material as THREE.MeshStandardMaterial;
+    if (lobbyMat && lobbyMat.emissive) {
+      if (this.hoveredButton === 'lobby') {
+        const hoverPulse = Math.sin(t * 10) * 0.25 + 0.5;
+        lobbyMat.emissive.setHex(0x33ffff);
+        lobbyMat.emissiveIntensity = 1.5 + hoverPulse * 0.5;
+        this.lobbyButtonGroup.scale.setScalar(1.05);
+      } else {
+        this.lobbyButtonGroup.scale.setScalar(1.0);
+        const pulse = Math.sin(t * 3 + 1) * 0.5 + 0.5;
+        lobbyMat.emissive.setHex(0x00ffff);
+        lobbyMat.emissiveIntensity = 0.3 + (pulse * 0.3);
+        // Rotate ring
+        if (this.lobbyButtonGroup.children[2]) {
+          const ringMesh = this.lobbyButtonGroup.children[2] as THREE.Mesh;
+          ringMesh.rotation.z = -t * 0.5;
+        }
+      }
+    }
+
+    // Glitch effect only when not hovering either
+    if (!this.hoveredButton) {
       this.glitchPass.goWild = false;
-      const hoverPulse = Math.sin(t * 10) * 0.25 + 0.5;
-      capMat.emissive.setHex(0xff3333);
-      capMat.emissiveIntensity = 1.5 + hoverPulse * 0.5;
-
-      this.buttonGroup.scale.setScalar(1.05);
     } else {
       this.glitchPass.goWild = false;
-      this.buttonGroup.scale.setScalar(1.0);
-
-      const pulse = Math.sin(t * 3) * 0.5 + 0.5;
-      capMat.emissive.setHex(0xff0000);
-      capMat.emissiveIntensity = 0.3 + (pulse * 0.3);
-
-      // Rotate ring
-      const ringMesh = this.buttonGroup.children[2] as THREE.Mesh;
-      ringMesh.rotation.z = t * 0.5;
     }
 
     if (this.textGroup) {
@@ -328,14 +466,14 @@ export class StartScreen {
         baseColor.getHSL(hsl);
         (mesh.material as THREE.MeshStandardMaterial).emissive.setHSL(hsl.h + hueShift, hsl.s, hsl.l);
 
-        const extraEnergy = this.isHoveringButton ? 0.5 : 0.0;
+        const extraEnergy = this.hoveredButton ? 0.5 : 0.0;
         (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.5 + Math.sin(t * 2) * 0.15 + extraEnergy;
       });
     }
 
     if (this.gridHelper) this.gridHelper.position.z = (t * 2) % 10;
 
-    if (!this.isHoveringButton) {
+    if (!this.hoveredButton) {
       if (Math.random() > 0.999) {
         this.glitchPass.curF = Math.floor(Math.random() * 10);
       }
@@ -352,6 +490,5 @@ export class StartScreen {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
-    // Note: bloomPass resolution update might need adjustment
   }
 }

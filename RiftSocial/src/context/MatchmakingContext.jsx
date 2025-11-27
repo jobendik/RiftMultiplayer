@@ -25,7 +25,16 @@ export const MatchmakingProvider = ({ children }) => {
             setMatchFound(match);
         });
 
-        return () => unsubMatch();
+        const unsubStart = subscribe('match_start', (data) => {
+            console.log('Match starting!', data);
+            // Redirect to game
+            window.location.href = data.gameUrl;
+        });
+
+        return () => {
+            unsubMatch();
+            unsubStart();
+        };
     }, [subscribe]);
 
     const startQueue = (modeId) => {

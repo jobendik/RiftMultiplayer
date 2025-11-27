@@ -552,4 +552,25 @@ export class HUDManager {
       scoreboard.style.display = visible ? 'block' : 'none';
     }
   }
+
+  public showWaitingForPlayers(show: boolean): void {
+    let waitingEl = document.getElementById('waiting-message');
+    if (!waitingEl) {
+      waitingEl = document.createElement('div');
+      waitingEl.id = 'waiting-message';
+      waitingEl.style.position = 'absolute';
+      waitingEl.style.top = '20%';
+      waitingEl.style.left = '50%';
+      waitingEl.style.transform = 'translate(-50%, -50%)';
+      waitingEl.style.color = '#ffffff';
+      waitingEl.style.fontFamily = "'Orbitron', sans-serif";
+      waitingEl.style.fontSize = '24px';
+      waitingEl.style.fontWeight = 'bold';
+      waitingEl.style.textShadow = '0 0 10px rgba(0, 255, 255, 0.5)';
+      waitingEl.style.zIndex = '100';
+      waitingEl.textContent = 'WAITING FOR PLAYERS...';
+      document.body.appendChild(waitingEl);
+    }
+    waitingEl.style.display = show ? 'block' : 'none';
+  }
 }

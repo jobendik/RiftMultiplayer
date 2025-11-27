@@ -3,17 +3,30 @@ import { GlitchText } from '../components/ui/GlitchText';
 import { useAuth } from '../context/AuthContext';
 
 export const AuthView = () => {
-    const { login, isLoading } = useAuth();
-    const [email, setEmail] = useState('demo@rift.com');
-    const [password, setPassword] = useState('password');
+    const { login, register, isLoading } = useAuth();
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        const success = await login(email, password);
+
+        let success;
+        if (isRegistering) {
+            if (!username) {
+                setError('Username is required');
+                return;
+            }
+            success = await register(email, username, password);
+        } else {
+            success = await login(email, password);
+        }
+
         if (!success) {
-            setError('Invalid credentials. Try demo@rift.com / password');
+            setError(isRegistering ? 'Registration failed. User may already exist.' : 'Invalid credentials.');
         }
     };
 
@@ -33,6 +46,19 @@ export const AuthView = () => {
                     {error && (
                         <div className="p-3 bg-red-900/20 border border-red-500/50 text-red-400 text-xs font-bold uppercase tracking-wide">
                             {error}
+                        </div>
+                    )}
+
+                    {isRegistering && (
+                        <div className="space-y-2">
+                            <label className="text-xs text-slate-400 uppercase tracking-widest font-bold">Username</label>
+                            <input
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="w-full bg-slate-900/50 border border-slate-700 text-white px-4 py-3 focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all font-mono text-sm"
+                                placeholder="CODENAME"
+                            />
                         </div>
                     )}
 
@@ -58,24 +84,36 @@ export const AuthView = () => {
                         />
                     </div>
 
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                        <label className="flex items-center gap-2 cursor-pointer hover:text-slate-300">
-                            <input type="checkbox" className="accent-cyan-500" defaultChecked />
-                            REMEMBER ME
-                        </label>
-                        <button type="button" className="hover:text-cyan-400 transition-colors">FORGOT KEY?</button>
-                    </div>
+                    {!isRegistering && (
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                            <label className="flex items-center gap-2 cursor-pointer hover:text-slate-300">
+                                <input type="checkbox" className="accent-cyan-500" defaultChecked />
+                                REMEMBER ME
+                            </label>
+                            <button type="button" className="hover:text-cyan-400 transition-colors">FORGOT KEY?</button>
+                        </div>
+                    )}
 
                     <button
                         type="submit"
                         disabled={isLoading}
                         className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(34,211,238,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isLoading ? 'Authenticating...' : 'Initialize Session'}
+                        {isLoading ? 'Processing...' : (isRegistering ? 'Initialize New Agent' : 'Initialize Session')}
                     </button>
 
                     <div className="text-center text-xs text-slate-600 mt-6">
-                        NO ACCOUNT? <button type="button" className="text-cyan-500 hover:text-cyan-400 font-bold ml-1">REGISTER NEW AGENT</button>
+                        {isRegistering ? 'ALREADY HAVE AN ACCOUNT?' : 'NO ACCOUNT?'}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsRegistering(!isRegistering);
+                                setError('');
+                            }}
+                            className="text-cyan-500 hover:text-cyan-400 font-bold ml-1"
+                        >
+                            {isRegistering ? 'LOGIN' : 'REGISTER NEW AGENT'}
+                        </button>
                     </div>
                 </form>
             </div>

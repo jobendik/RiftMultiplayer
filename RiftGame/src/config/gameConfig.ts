@@ -45,6 +45,9 @@ export const ARENA_CONFIG: ArenaConfig = {
   wallHeight: 8,
 };
 
+declare var process: { env: { [key: string]: string } };
+export const LOBBY_URL = process.env.VITE_LOBBY_URL || 'http://localhost:5173';
+
 const BASE_AUDIO_PATH = 'assets/audio/weapons/';
 
 const DEFAULT_VISUALS = {

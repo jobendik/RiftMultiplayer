@@ -148,6 +148,10 @@ export class NetworkManager {
         return Array.from(this.remotePlayers.values());
     }
 
+    public get otherPlayers(): Map<string, RemotePlayer> {
+        return this.remotePlayers;
+    }
+
     public getScores() {
         return this.scores;
     }
