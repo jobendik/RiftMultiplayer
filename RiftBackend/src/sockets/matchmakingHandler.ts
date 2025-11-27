@@ -9,6 +9,16 @@ interface QueuedPlayer {
 
 const queue: QueuedPlayer[] = [];
 
+interface PendingMatch {
+    id: string;
+    modeId: string;
+    players: QueuedPlayer[];
+    accepted: Set<number>; // userIds
+    timeout: NodeJS.Timeout;
+}
+
+const pendingMatches = new Map<string, PendingMatch>();
+
 export const setupMatchmaking = (io: Server, socket: Socket) => {
     const userId = (socket as any).userId;
 
@@ -42,6 +52,48 @@ export const setupMatchmaking = (io: Server, socket: Socket) => {
         }
     });
 
+    socket.on('accept_match', (data) => {
+        const { matchId } = data;
+        const match = pendingMatches.get(matchId);
+
+        if (match) {
+            console.log(`User ${userId} accepted match ${matchId}`);
+            match.accepted.add(userId);
+
+            // Check if all accepted
+            if (match.accepted.size === match.players.length) {
+                console.log(`Match ${matchId} starting!`);
+                clearTimeout(match.timeout);
+                pendingMatches.delete(matchId);
+
+                // Notify all players to start
+                match.players.forEach(p => {
+                    io.to(p.socketId).emit('match_start', {
+                        matchId,
+                        modeId: match.modeId,
+                        gameUrl: `http://localhost:8080/?mode=${match.modeId}&token=mock-jwt-token-${p.userId}`
+                    });
+                });
+            }
+        }
+    });
+
+    socket.on('decline_match', (data) => {
+        const { matchId } = data;
+        const match = pendingMatches.get(matchId);
+
+        if (match) {
+            console.log(`User ${userId} declined match ${matchId}`);
+            clearTimeout(match.timeout);
+            pendingMatches.delete(matchId);
+
+            // Notify others that match failed
+            match.players.forEach(p => {
+                io.to(p.socketId).emit('match_cancelled', { reason: 'Player declined' });
+            });
+        }
+    });
+
     socket.on('disconnect', () => {
         const index = queue.findIndex(p => p.userId === userId);
         if (index !== -1) {
@@ -70,6 +122,24 @@ const findMatch = (io: Server, modeId: string) => {
 
         const matchId = `match_${Date.now()}_${p1.userId}_${p2.userId}`;
         console.log(`Match found: ${matchId} (${p1.userId} vs ${p2.userId})`);
+
+        // Create Pending Match
+        const pendingMatch: PendingMatch = {
+            id: matchId,
+            modeId,
+            players: [p1, p2],
+            accepted: new Set(),
+            timeout: setTimeout(() => {
+                // Timeout if not everyone accepts
+                console.log(`Match ${matchId} timed out`);
+                pendingMatches.delete(matchId);
+                [p1, p2].forEach(p => {
+                    io.to(p.socketId).emit('match_cancelled', { reason: 'Accept timeout' });
+                });
+            }, 11000) // 11 seconds (slightly more than client 10s)
+        };
+
+        pendingMatches.set(matchId, pendingMatch);
 
         // Notify players
         [p1, p2].forEach(p => {

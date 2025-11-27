@@ -19,6 +19,59 @@ export const checkAuth = (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
+router.post('/register', async (req, res) => {
+    const { email, username, password } = req.body;
+
+    try {
+        // Check if user exists
+        const existingUser = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email },
+                    { username }
+                ]
+            }
+        });
+
+        if (existingUser) {
+            return res.status(400).json({ message: 'User already exists' });
+        }
+
+        // Create user
+        const user = await prisma.user.create({
+            data: {
+                email,
+                username,
+                password, // In a real app, hash this!
+                stats: {
+                    create: {
+                        level: 1,
+                        xp: 0
+                    }
+                },
+                currency: {
+                    create: {
+                        riftTokens: 1000,
+                        plasmaCredits: 100
+                    }
+                }
+            },
+            include: {
+                stats: true,
+                currency: true
+            }
+        });
+
+        const token = 'mock-jwt-token-' + user.id;
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ token, user: userWithoutPassword });
+
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
