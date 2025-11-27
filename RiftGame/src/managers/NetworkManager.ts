@@ -7,6 +7,7 @@ export class NetworkManager {
     private socket: Socket;
     private game: Game;
     private remotePlayers: Map<string, RemotePlayer> = new Map();
+    private deadPlayers: Set<any> = new Set(); // Track dead players to prevent recreation
     private updateRate = 50; // ms
     private lastUpdate = 0;
     private matchId = 'deathmatch_room'; // Default room for now
@@ -51,6 +52,11 @@ export class NetworkManager {
         this.socket.on('player_update', (data: any) => {
             const { userId, position, rotation, isSprinting, isGrounded } = data;
 
+            // Ignore updates for dead players
+            if (this.deadPlayers.has(userId)) {
+                return;
+            }
+
             let remotePlayer = this.remotePlayers.get(userId);
             if (!remotePlayer) {
                 remotePlayer = this.addRemotePlayer(userId);
@@ -82,8 +88,34 @@ export class NetworkManager {
             const { attackerId, victimId, weaponType } = data;
             console.log(`Player ${victimId} killed by ${attackerId} with ${weaponType}`);
 
+            // Mark player as dead to ignore future updates
+            this.deadPlayers.add(victimId);
+
+            // Remove the dead player's mesh (victimId is a number, matches map key type)
+            if (this.remotePlayers.has(victimId)) {
+                const deadPlayer = this.remotePlayers.get(victimId);
+                if (deadPlayer) {
+                    deadPlayer.destroy();
+                    this.remotePlayers.delete(victimId);
+                    console.log(`Player ${victimId} removed from scene`);
+                }
+            }
+
             if (this.game.handleKillFeed) {
                 this.game.handleKillFeed(attackerId, victimId, weaponType);
+            }
+        });
+
+        this.socket.on('player_respawned', (data: any) => {
+            const { userId } = data;
+            console.log(`Player ${userId} respawned`);
+
+            // Remove from dead players list
+            this.deadPlayers.delete(userId);
+
+            // Recreate the remote player if they don't exist (userId is number, matches map key)
+            if (!this.remotePlayers.has(userId) && String(userId) !== this.myUserId) {
+                this.addRemotePlayer(userId);
             }
         });
 

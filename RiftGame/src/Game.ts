@@ -1459,11 +1459,11 @@ export class Game {
   }
 
   public handleKillFeed(attackerId: string, victimId: string, weaponType: string) {
-    const isMe = attackerId === this.networkManager.myUserId;
-    const isVictim = victimId === this.networkManager.myUserId;
+    const isMe = String(attackerId) === this.networkManager.myUserId;
+    const isVictim = String(victimId) === this.networkManager.myUserId;
 
-    const attackerName = isMe ? 'YOU' : `Player ${attackerId.substr(0, 4)}`;
-    const victimName = isVictim ? 'YOU' : `Player ${victimId.substr(0, 4)}`;
+    const attackerName = isMe ? 'YOU' : `Player ${String(attackerId).substr(0, 4)}`;
+    const victimName = isVictim ? 'YOU' : `Player ${String(victimId).substr(0, 4)}`;
 
     this.hudManager.addKillFeed(
       attackerName,
