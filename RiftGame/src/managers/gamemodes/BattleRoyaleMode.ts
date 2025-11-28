@@ -34,11 +34,19 @@ export class BattleRoyaleMode implements IGameMode {
         this.timeUntilShrink = 30; // 30 seconds prep time
         console.log('Battle Royale Started! Zone Radius:', this.zoneRadius);
 
-        this.spawnPlayer();
-        this.spawnEnemies(20);
-
         // Notify HUD
         this.game.hudManager.showMessage('BATTLE ROYALE STARTED', 3000);
+
+        this.spawnPlayer();
+
+        // Calculate enemies needed to reach 20 total participants
+        const remoteCount = this.game.networkManager.getRemotePlayers().length;
+        const totalTarget = 20;
+        // +1 for local player
+        const enemiesNeeded = Math.max(5, totalTarget - (remoteCount + 1));
+
+        console.log(`Spawning ${enemiesNeeded} enemies for ${remoteCount + 1} players`);
+        this.spawnEnemies(enemiesNeeded);
     }
 
     private spawnEnemies(count: number): void {

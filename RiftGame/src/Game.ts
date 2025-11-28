@@ -929,36 +929,50 @@ export class Game {
 
   public update(delta: number): void {
     // Spectator Mode Logic
+    // Spectator Mode Logic
     if (this.isSpectating) {
       const remotePlayers = this.networkManager.getRemotePlayers();
-      let targetMesh: THREE.Object3D | null = null;
+      const enemies = this.enemyManager.getEnemies();
+      // Use mesh.uuid as fallback ID for enemies since they don't have a dedicated ID property
+      const allTargets = [...remotePlayers.map(p => ({ mesh: p.mesh, id: p.id, name: `Player ${p.id}` })), ...enemies.map(e => ({ mesh: e.mesh, id: e.mesh.uuid, name: 'Enemy' }))];
 
-      if (remotePlayers.length > 0) {
+      if (allTargets.length > 0) {
+        // Input for switching targets
+        if (this.inputManager.isActionPressed(GameAction.Fire)) { // Left Click
+          this.cycleSpectatorTarget(allTargets, 1);
+        } else if (this.inputManager.isActionPressed(GameAction.Aim)) { // Right Click
+          this.cycleSpectatorTarget(allTargets, -1);
+        }
+
         if (!this.spectatorTargetId) {
-          this.spectatorTargetId = remotePlayers[0].id;
+          this.spectatorTargetId = allTargets[0].id;
         }
-        const target = remotePlayers.find(p => p.id === this.spectatorTargetId) || remotePlayers[0];
-        if (target) targetMesh = target.mesh;
+
+        const target = allTargets.find(t => t.id === this.spectatorTargetId) || allTargets[0];
+
+        if (target) {
+          // Update UI if changed
+          if (this.hudManager) {
+            // We might want to optimize this to not call every frame
+            // But for now it ensures the name is correct
+            // this.hudManager.showSpectatorUI(target.name); 
+          }
+
+          // Third-person follow camera
+          // Calculate desired position (behind and above)
+          const offset = new THREE.Vector3(0, 4, 6);
+          offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), target.mesh.rotation.y);
+
+          const desiredPos = target.mesh.position.clone().add(offset);
+          const lookAtTarget = target.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+
+          // Smoothly move camera
+          this.camera.position.lerp(desiredPos, delta * 5);
+          this.camera.lookAt(lookAtTarget);
+        }
       } else {
-        // Fallback to spectating enemies
-        const enemies = this.enemyManager.getEnemies();
-        if (enemies.length > 0) {
-          targetMesh = enemies[0].mesh;
-        }
-      }
-
-      if (targetMesh) {
-        // Third-person follow camera
-        // Calculate desired position (behind and above)
-        const offset = new THREE.Vector3(0, 3, 5);
-        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetMesh.rotation.y);
-
-        const desiredPos = targetMesh.position.clone().add(offset);
-        const lookAtTarget = targetMesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
-
-        // Smoothly move camera
-        this.camera.position.lerp(desiredPos, delta * 5);
-        this.camera.lookAt(lookAtTarget);
+        // No targets left
+        this.hudManager.showMessage('NO TARGETS TO SPECTATE', 100);
       }
     }
 
@@ -1803,5 +1817,24 @@ export class Game {
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn) restartBtn.style.display = 'none';
   }
+  private lastSpectatorSwitchTime = 0;
+
+  private cycleSpectatorTarget(targets: any[], direction: number): void {
+    const now = performance.now();
+    if (now - this.lastSpectatorSwitchTime < 300) return; // 300ms debounce
+    this.lastSpectatorSwitchTime = now;
+
+    const currentIndex = targets.findIndex(t => t.id === this.spectatorTargetId);
+    let nextIndex = currentIndex + direction;
+
+    if (nextIndex >= targets.length) nextIndex = 0;
+    if (nextIndex < 0) nextIndex = targets.length - 1;
+
+    const nextTarget = targets[nextIndex];
+    if (nextTarget) {
+      this.spectatorTargetId = nextTarget.id;
+      this.hudManager.showSpectatorUI(nextTarget.name);
+      this.hudManager.showMessage(`SWITCHED TO ${nextTarget.name}`, 1000);
+    }
+  }
 }
-// Force rebuild
