@@ -18,8 +18,45 @@ const checkAuth = (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-router.get('/loadout', checkAuth, async (req: Request, res: Response) => {
-    const userId = (req as AuthenticatedRequest).userId!;
+interface Loadout {
+    currency: {
+        riftTokens: number;
+        plasmaCredits: number;
+    };
+    inventory: Array<{
+        itemId: string;
+        type: string;
+        quantity: number;
+    }>;
+    equipped: {
+        primary: string;
+        secondary: string;
+    };
+}
+
+// Helper for default loadout
+const getDefaultLoadout = (): Loadout => ({
+    currency: { riftTokens: 0, plasmaCredits: 0 },
+    inventory: [],
+    equipped: {
+        primary: 'AK47',
+        secondary: 'Pistol'
+    }
+});
+
+router.get('/loadout', async (req: Request, res: Response) => {
+    // Try to get user from token, but don't fail if missing
+    const token = req.headers.authorization?.split(' ')[1];
+    let userId: number | undefined;
+
+    if (token && token.startsWith('mock-jwt-token-')) {
+        userId = parseInt(token.split('-').pop() || '0');
+    }
+
+    if (!userId) {
+        console.log('No user ID found, returning default guest loadout');
+        return res.json(getDefaultLoadout());
+    }
 
     try {
         const user = await prisma.user.findUnique({
@@ -31,29 +68,30 @@ router.get('/loadout', checkAuth, async (req: Request, res: Response) => {
         });
 
         if (user) {
-            res.json({
-                currency: user.currency,
-                inventory: user.inventory,
-                // In a real game, this would return equipped items from a Loadout model
+            const loadout: Loadout = {
+                currency: {
+                    riftTokens: user.currency?.riftTokens || 0,
+                    plasmaCredits: user.currency?.plasmaCredits || 0
+                },
+                inventory: user.inventory.map(item => ({
+                    itemId: item.itemId,
+                    type: item.type,
+                    quantity: item.quantity
+                })),
                 equipped: {
-                    primary: 'AK47',
+                    primary: 'AK47', // In real app, fetch from DB
                     secondary: 'Pistol'
                 }
-            });
+            };
+            res.json(loadout);
         } else {
-            // Fallback for guest/dev users who don't exist in DB yet
-            console.log(`User ${userId} not found, returning default loadout`);
-            res.json({
-                currency: { riftTokens: 0, plasmaCredits: 0 },
-                inventory: [],
-                equipped: {
-                    primary: 'AK47',
-                    secondary: 'Pistol'
-                }
-            });
+            console.log(`User ${userId} not found in DB, returning default loadout`);
+            res.json(getDefaultLoadout());
         }
     } catch (error) {
         console.error('Loadout error:', error);
+        // Even on error, maybe safer to return default loadout for game continuity? 
+        // But 500 is appropriate for DB errors.
         res.status(500).json({ message: 'Internal server error' });
     }
 });
