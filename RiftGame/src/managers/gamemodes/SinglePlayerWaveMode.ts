@@ -1,5 +1,7 @@
 import { BaseGameMode } from './BaseGameMode';
 import { PLAYER_CONFIG } from '../../config/gameConfig';
+import { GruntAgent } from '../../ai/agents/GruntAgent';
+import { SmartBotAgent } from '../../ai/agents/SmartBotAgent';
 
 export class SinglePlayerWaveMode extends BaseGameMode {
     public getName(): string {
@@ -42,6 +44,17 @@ export class SinglePlayerWaveMode extends BaseGameMode {
         this.game.gameState.waveInProgress = true;
         this.game.gameState.betweenWaves = false;
         this.game.enemyManager.spawnWave(this.game.gameState.wave);
+
+        // TEST: Spawn Yuka Grunt
+        const grunt = new GruntAgent(this.game.player);
+        grunt.position.set(10, 0, 10);
+        this.game.aiManager.add(grunt);
+
+        // TEST: Spawn Yuka SmartBot
+        const bot = new SmartBotAgent(this.game.player);
+        bot.position.set(-10, 0, 10);
+        this.game.aiManager.add(bot);
+
         this.game.updateHUD();
     }
 

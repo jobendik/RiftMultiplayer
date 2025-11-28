@@ -63,15 +63,16 @@ export class NetworkManager {
 
         this.socket.on('player_update', (data: any) => {
             const { userId, position, rotation, isSprinting, isGrounded } = data;
+            const userIdStr = String(userId);
 
             // Ignore updates for dead players
             if (this.deadPlayers.has(userId)) {
                 return;
             }
 
-            let remotePlayer = this.remotePlayers.get(userId);
+            let remotePlayer = this.remotePlayers.get(userIdStr);
             if (!remotePlayer) {
-                remotePlayer = this.addRemotePlayer(userId);
+                remotePlayer = this.addRemotePlayer(userIdStr);
             }
 
             remotePlayer.updateState(position, rotation, isSprinting, isGrounded);
@@ -103,13 +104,14 @@ export class NetworkManager {
             // Mark player as dead to ignore future updates
             this.deadPlayers.add(victimId);
 
-            // Remove the dead player's mesh (victimId is a number, matches map key type)
-            if (this.remotePlayers.has(victimId)) {
-                const deadPlayer = this.remotePlayers.get(victimId);
+            // Remove the dead player's mesh (ensure ID is string)
+            const victimIdStr = String(victimId);
+            if (this.remotePlayers.has(victimIdStr)) {
+                const deadPlayer = this.remotePlayers.get(victimIdStr);
                 if (deadPlayer) {
                     deadPlayer.destroy();
-                    this.remotePlayers.delete(victimId);
-                    console.log(`Player ${victimId} removed from scene`);
+                    this.remotePlayers.delete(victimIdStr);
+                    console.log(`Player ${victimIdStr} removed from scene`);
                 }
             }
 
@@ -128,18 +130,19 @@ export class NetworkManager {
 
         this.socket.on('player_respawned', (data: any) => {
             const { userId, team } = data;
-            console.log(`Player ${userId} respawned (${team})`);
+            const userIdStr = String(userId);
+            console.log(`Player ${userIdStr} respawned (${team})`);
 
             if (team) {
-                this.playerTeams.set(userId, team);
+                this.playerTeams.set(userIdStr, team);
             }
 
             // Remove from dead players list
-            this.deadPlayers.delete(userId);
+            this.deadPlayers.delete(userIdStr);
 
-            // Recreate the remote player if they don't exist (userId is number, matches map key)
-            if (!this.remotePlayers.has(userId) && String(userId) !== this.myUserId) {
-                this.addRemotePlayer(userId);
+            // Recreate the remote player if they don't exist (ensure ID is string)
+            if (!this.remotePlayers.has(userIdStr) && userIdStr !== this.myUserId) {
+                this.addRemotePlayer(userIdStr);
             }
         });
 

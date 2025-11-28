@@ -26,6 +26,7 @@ import { SettingsManager } from './managers/SettingsManager';
 import { GameModeManager, GameModeType } from './managers/GameModeManager';
 import { DEFAULT_MAP, BATTLE_ROYALE_MAP } from './config/maps';
 import { ZoneSystem } from './systems/ZoneSystem';
+import { AIManager } from './ai/core/AIManager';
 
 // ... (existing imports)
 
@@ -68,6 +69,7 @@ export class Game {
   public backendConnector: BackendConnector;
   public networkManager: NetworkManager;
   public gameModeManager: GameModeManager;
+  public aiManager: AIManager;
 
   public gameState: GameState;
   private lastTime = 0;
@@ -195,6 +197,7 @@ export class Game {
 
     this.networkManager = new NetworkManager(this);
     this.gameModeManager = new GameModeManager(this);
+    this.aiManager = new AIManager(this.scene);
 
     this.gameState = {
       running: false,
@@ -740,46 +743,7 @@ export class Game {
   //   location.reload();
   // }
 
-  private gameOver(): void {
-    this.gameState.running = false;
-    this.tryExitPointerLock();
 
-    // Play death sound
-    this.player.playDeathSound();
-
-    const time = (performance.now() - this.gameState.timeStarted) / 1000;
-    const accuracy =
-      this.gameState.shotsFired > 0
-        ? Math.round((this.gameState.shotsHit / this.gameState.shotsFired) * 100)
-        : 0;
-
-    // Sync stats to backend
-    if (this.backendConnector) {
-      this.backendConnector.syncStats({
-        kills: this.gameState.kills,
-        score: this.gameState.score,
-        timePlayed: time,
-        won: false // Always false for now as it's survival
-      }).then((result: any) => {
-        if (result) {
-          console.log('Stats synced successfully:', result);
-          if (result.newLevel) {
-            this.hudManager.showMessage(`LEVEL UP! ${result.newLevel}`);
-          }
-        }
-      });
-    }
-
-    this.hudManager.showGameOver({
-      wave: this.gameState.wave,
-      kills: this.gameState.kills,
-      accuracy,
-      time: `${Math.floor(time / 60)}:${Math.floor(time % 60)
-        .toString()
-        .padStart(2, '0')}`,
-      score: this.gameState.score,
-    });
-  }
 
   public updateHUD(): void {
     const healthPercent = (this.player.health / PLAYER_CONFIG.maxHealth) * 100;
@@ -1548,7 +1512,7 @@ export class Game {
       this.weaponSystem.cameraShake.intensity = Math.max(this.weaponSystem.cameraShake.intensity, 0.04);
 
       if (isDead) {
-        this.gameOver();
+        this.handleDeath();
       }
     } else if (!hasObstacleInWay && raycaster.ray.intersectsBox(nearMissBox)) {
       // NEAR MISS - White indicator warning (no damage)
@@ -1664,6 +1628,7 @@ export class Game {
     this.gameTime += delta;
 
     this.update(delta);
+    this.aiManager.update(delta);
     if (this.networkManager && this.player && this.camera) {
       this.networkManager.update(delta, this.player, this.camera);
     }
@@ -1756,6 +1721,8 @@ export class Game {
 
     // Check for Battle Royale Mode
     const currentMode = this.gameModeManager.getCurrentMode();
+    console.log('handleDeath called. Current Mode:', currentMode ? currentMode.getName() : 'None');
+
     if (currentMode && currentMode.getName() === 'Battle Royale') {
       console.log('Player died in Battle Royale - entering Spectator Mode');
       this.isSpectating = true;
@@ -1763,14 +1730,20 @@ export class Game {
 
       // Find a target to spectate
       const remotePlayers = this.networkManager.getRemotePlayers();
-      if (remotePlayers.length > 0) {
-        this.spectatorTargetId = remotePlayers[0].id;
-        this.hudManager.showSpectatorUI(this.spectatorTargetId);
+      const enemies = this.enemyManager.getEnemies();
+      // Use mesh.uuid as fallback ID for enemies since they don't have a dedicated ID property
+      const allTargets = [...remotePlayers.map(p => ({ mesh: p.mesh, id: p.id, name: `Player ${p.id}` })), ...enemies.map(e => ({ mesh: e.mesh, id: e.mesh.uuid, name: 'Enemy' }))];
+
+      if (allTargets.length > 0) {
+        this.spectatorTargetId = allTargets[0].id;
+        this.hudManager.showSpectatorUI(allTargets[0].name);
       } else {
         this.hudManager.showMessage('NO PLAYERS TO SPECTATE', 3000);
       }
       return; // Skip standard respawn logic
     }
+
+    console.log('Not Battle Royale, proceeding to standard Game Over');
 
     // Disable controls
     this.tryExitPointerLock();
