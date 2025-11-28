@@ -13,12 +13,10 @@ export enum GameModeType {
 }
 
 export class GameModeManager {
-    private game: Game;
     private currentMode: IGameMode | null = null;
     private modes: Map<GameModeType, IGameMode> = new Map();
 
     constructor(game: Game) {
-        this.game = game;
         this.modes.set(GameModeType.SINGLE_PLAYER_WAVE, new SinglePlayerWaveMode(game));
         this.modes.set(GameModeType.MULTIPLAYER_DEATHMATCH, new MultiplayerDeathmatchMode(game));
         this.modes.set(GameModeType.TEAM_DEATHMATCH, new TeamDeathmatchMode(game));

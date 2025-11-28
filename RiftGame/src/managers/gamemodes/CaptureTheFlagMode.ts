@@ -48,6 +48,7 @@ export class CaptureTheFlagMode extends BaseGameMode {
     private checkFlagInteractions() {
         const player = this.game.player;
         const myTeam = this.game.networkManager.myTeam;
+
         if (!myTeam) return;
 
         const enemyFlag = myTeam === 'red' ? this.blueFlag : this.redFlag;
@@ -57,21 +58,27 @@ export class CaptureTheFlagMode extends BaseGameMode {
 
         // 1. Pickup Enemy Flag
         if (enemyFlag.state === 'home' || enemyFlag.state === 'dropped') {
-            if (player.position.distanceTo(enemyFlag.mesh.position) < 2.0) {
+            const dist = player.position.distanceTo(enemyFlag.mesh.position);
+            if (dist < 3.0) {
                 this.game.networkManager.sendFlagAction('pickup', enemyFlag.team);
             }
         }
 
         // 2. Capture Flag (Have enemy flag + Touch my home flag)
-        if (enemyFlag.carrierId === this.game.networkManager.myUserId && myFlag.state === 'home') {
-            if (player.position.distanceTo(myFlag.homePosition) < 2.0) {
-                this.game.networkManager.sendFlagAction('capture', enemyFlag.team);
+        // Force string comparison for carrierId
+        if (String(enemyFlag.carrierId) === String(this.game.networkManager.myUserId)) {
+            if (myFlag.state === 'home') {
+                const distMesh = player.position.distanceTo(myFlag.mesh.position);
+                // Use mesh position as it's what the player sees
+                if (distMesh < 5.0) {
+                    this.game.networkManager.sendFlagAction('capture', enemyFlag.team);
+                }
             }
         }
 
         // 3. Return Own Flag (Touch dropped own flag)
         if (myFlag.state === 'dropped') {
-            if (player.position.distanceTo(myFlag.mesh.position) < 2.0) {
+            if (player.position.distanceTo(myFlag.mesh.position) < 3.0) {
                 this.game.networkManager.sendFlagAction('return', myFlag.team);
             }
         }
@@ -85,8 +92,6 @@ export class CaptureTheFlagMode extends BaseGameMode {
             flag.pickup(playerId);
             this.game.hudManager.showMessage(`${team.toUpperCase()} FLAG TAKEN!`, 2000);
         } else if (action === 'drop') {
-            // We need position for drop, this might need extra data in event
-            // For now, let's assume drop happens at player position if we can find them
             const playerPos = this.getPlayerPosition(playerId);
             if (playerPos) flag.drop(playerPos);
         } else if (action === 'return') {
@@ -126,18 +131,8 @@ export class CaptureTheFlagMode extends BaseGameMode {
         const blueFlag = this.blueFlag;
 
         if (redFlag && redFlag.carrierId === victimId) {
-            // Victim was carrying RED flag
-            // We need the victim's position. 
-            // If local player died, use local pos. If remote, use remote pos.
             const pos = this.getPlayerPosition(victimId);
             if (pos) {
-                // Send drop event? Or handle locally?
-                // Ideally the server handles "death causes drop"
-                // But for now let's have the client who died send the drop?
-                // Or the killer?
-                // Better: Server knows victim died, server checks if carrying, server sends drop.
-                // But we don't have server physics.
-                // So the client who died should send "I dropped the flag"
                 if (victimId === this.game.networkManager.myUserId) {
                     this.game.networkManager.sendFlagAction('drop', 'red', pos);
                 }

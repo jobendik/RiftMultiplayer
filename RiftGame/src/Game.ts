@@ -387,6 +387,7 @@ export class Game {
   }
 
   private returnToLobby(): void {
+    console.log('Returning to lobby...');
     window.location.href = 'http://localhost:5173';
   }
 
@@ -878,7 +879,7 @@ export class Game {
       isFiring = this.mobileControls.firePressed;
 
       // Update Game Mode
-      this.gameModeManager.update(delta);
+      // this.gameModeManager.update(delta); // Moved to shared code
       if (this.mobileControls.reloadPressed) {
         this.tryReload();
       }
@@ -914,8 +915,12 @@ export class Game {
       this.player.rotation.y -= this.inputManager.mouse.deltaX;
       this.player.rotation.x -= this.inputManager.mouse.deltaY;
       this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
+      this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
       this.inputManager.resetMouseDelta();
     }
+
+    // Update Game Mode (Run for both Mobile and Desktop)
+    this.gameModeManager.update(delta);
 
     // Dead check
     if (this.player.isDead()) {

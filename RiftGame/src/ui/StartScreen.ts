@@ -21,6 +21,7 @@ export class StartScreen {
   private gridHelper?: THREE.GridHelper;
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
+  private hasMode: boolean = false;
 
   private hoveredButton: 'start' | 'lobby' | null = null;
   private clock: THREE.Clock;
@@ -118,9 +119,9 @@ export class StartScreen {
 
     // Check for mode in URL
     const urlParams = new URLSearchParams(window.location.search);
-    const hasMode = urlParams.has('mode');
+    this.hasMode = urlParams.has('mode');
 
-    if (hasMode) {
+    if (this.hasMode) {
       // Match Mode: Show "ENTER MATCH" button
       const mode = urlParams.get('mode');
       console.log('Match mode detected:', mode);
@@ -336,7 +337,7 @@ export class StartScreen {
         if (this.onStartCallback) {
           this.onStartCallback();
         }
-      } else if (this.hoveredButton === 'lobby') {
+      } else if (this.hoveredButton === 'lobby' && !this.hasMode) {
         this.lobbyCapMesh.position.y = -0.1;
         window.location.href = LOBBY_URL;
       }
@@ -392,7 +393,11 @@ export class StartScreen {
 
     // Check Start Button
     const startIntersects = this.raycaster.intersectObjects([this.capMesh], false);
-    const lobbyIntersects = this.raycaster.intersectObjects([this.lobbyCapMesh], false);
+    let lobbyIntersects: THREE.Intersection[] = [];
+
+    if (!this.hasMode) {
+      lobbyIntersects = this.raycaster.intersectObjects([this.lobbyCapMesh], false);
+    }
 
     const wasHovering = this.hoveredButton;
 

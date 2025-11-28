@@ -24,6 +24,13 @@ export class NetworkManager {
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token') || `mock-jwt-token-${Math.floor(Math.random() * 1000)}`;
 
+        // Get matchId from URL if present
+        const matchIdParam = urlParams.get('matchId');
+        if (matchIdParam) {
+            this.matchId = matchIdParam;
+            console.log('Joining specific match:', this.matchId);
+        }
+
         // Extract user ID from token for local comparison (must match server logic)
         // Server logic: parseInt(token.split('-').pop() || '0')
         const userIdStr = token.split('-').pop() || '0';

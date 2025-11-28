@@ -80,7 +80,7 @@ const setupMatchmaking = (io, socket) => {
                     io.to(p.socketId).emit('match_start', {
                         matchId,
                         modeId: match.modeId,
-                        gameUrl: `http://localhost:5173/?mode=${match.modeId}&token=mock-jwt-token-${p.userId}`
+                        gameUrl: `http://localhost:8080/?mode=${match.modeId}&token=mock-jwt-token-${p.userId}&matchId=${matchId}`
                     });
                 });
             }
