@@ -418,4 +418,8 @@ export class InputManager {
   public setScrollCallback(callback: (direction: number) => void): void {
     this.onScrollCallback = callback;
   }
+
+  public setSensitivity(sensitivity: number): void {
+    this.mouseSensitivity = sensitivity;
+  }
 }

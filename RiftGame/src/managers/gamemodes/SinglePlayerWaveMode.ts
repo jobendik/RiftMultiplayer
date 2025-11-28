@@ -8,6 +8,7 @@ export class SinglePlayerWaveMode extends BaseGameMode {
 
     public start(): void {
         super.start();
+        this.game.hudManager.showWaveDisplay();
 
         // Reset game state for wave mode
         this.game.gameState.wave = 1;
@@ -62,5 +63,9 @@ export class SinglePlayerWaveMode extends BaseGameMode {
                 this.startWave();
             }
         }, 3000);
+    }
+    public cleanup(): void {
+        super.cleanup();
+        this.game.hudManager.hideWaveDisplay();
     }
 }

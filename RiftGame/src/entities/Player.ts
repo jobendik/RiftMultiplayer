@@ -349,7 +349,8 @@ export class Player implements Damageable {
     wantsJump: boolean,
     wantsCrouch: boolean,
     canCutJump: boolean,
-    arenaObjects: Array<{ mesh: THREE.Mesh; box: THREE.Box3 }>
+    arenaObjects: Array<{ mesh: THREE.Mesh; box: THREE.Box3 }>,
+    mapSize: number = 60 // Default to classic arena size if not provided
   ): void {
     this.prevVelocity.copy(this.velocity);
 
@@ -493,7 +494,7 @@ export class Player implements Damageable {
     const newPos = this.position.clone().add(this.velocity.clone().multiplyScalar(delta));
 
     // Arena bounds
-    const bounds = 30 - 0.5; // Half of arena size
+    const bounds = mapSize / 2 - 0.5; // Half of arena size
     if (newPos.x < -bounds) { newPos.x = -bounds; this.velocity.x = 0; }
     if (newPos.x > bounds) { newPos.x = bounds; this.velocity.x = 0; }
     if (newPos.z < -bounds) { newPos.z = -bounds; this.velocity.z = 0; }

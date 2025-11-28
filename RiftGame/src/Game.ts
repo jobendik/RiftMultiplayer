@@ -22,11 +22,26 @@ import { PLAYER_CONFIG, CAMERA_CONFIG, WEAPON_CONFIG, LOBBY_URL } from './config
 import { DamageType } from './core/DamageTypes';
 import { BackendConnector } from './managers/BackendConnector';
 import { NetworkManager } from './managers/NetworkManager';
+import { SettingsManager } from './managers/SettingsManager';
 import { GameModeManager, GameModeType } from './managers/GameModeManager';
+import { DEFAULT_MAP, BATTLE_ROYALE_MAP } from './config/maps';
+import { ZoneSystem } from './systems/ZoneSystem';
+
+// ... (existing imports)
 
 export class Game {
+  // ... (existing properties)
+
+  public settingsManager: SettingsManager;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
+
+
+
+  // ...
+
+
+
   private renderer: THREE.WebGLRenderer;
   private postProcessing: PostProcessing;
 
@@ -40,6 +55,7 @@ export class Game {
   public bulletTracerSystem: BulletTracerSystem;
   public projectileSystem: ProjectileSystem;
   public explosionSystem: ExplosionSystem;
+  public zoneSystem: ZoneSystem;
   public damageTextSystem: DamageTextSystem;
   public arena: Arena;
   public inputManager: InputManager;
@@ -68,6 +84,11 @@ export class Game {
   private musicTrack?: THREE.Audio;
   private musicPlaying = false;
 
+  // Spectator Mode
+  public isSpectating = false;
+  private spectatorTargetId: string | null = null;
+  private isDeadSequenceActive: boolean = false;
+
   // Intro sequence
   private introActive = false;
   private introFallSpeed = 0;
@@ -76,6 +97,8 @@ export class Game {
 
   constructor() {
     console.log('Initializing game...');
+
+    this.settingsManager = new SettingsManager();
 
     // Initialize Three.js
     this.scene = new THREE.Scene();
@@ -128,7 +151,7 @@ export class Game {
     this.player = new Player(listener);
     this.particleSystem = new ParticleSystem(this.scene);
     this.weaponSystem = new WeaponSystem(this.camera, listener, this.particleSystem);
-    this.arena = new Arena(this.scene);
+    this.arena = new Arena(this.scene, DEFAULT_MAP);
     this.enemyManager = new EnemyManager(this.scene, listener);
     this.pickupSystem = new PickupSystem(this.scene, listener, this.arena);
     this.impactSystem = new ImpactSystem(this.scene, listener);
@@ -151,6 +174,7 @@ export class Game {
       this.weaponSystem,
       this.impactSystem
     );
+    this.zoneSystem = new ZoneSystem(this.scene);
 
     this.hudManager = new HUDManager();
     this.killfeedManager = new KillfeedManager();
@@ -187,6 +211,7 @@ export class Game {
     };
 
     console.log('Game initialized successfully');
+    this.applySettings();
   }
 
   public getScene(): THREE.Scene {
@@ -294,6 +319,33 @@ export class Game {
     this.scene.add(this.camera);
   }
 
+  private applySettings(): void {
+    const settings = this.settingsManager.getSettings();
+
+    // Apply Sensitivity
+    if (this.inputManager) {
+      this.inputManager.setSensitivity(settings.sensitivity);
+    }
+
+    // Apply Volume
+    if (this.musicTrack) this.musicTrack.setVolume(settings.volume * 0.3);
+    if (this.respawnSound) this.respawnSound.setVolume(settings.volume * 0.5);
+
+    if (this.camera) {
+      const listener = this.camera.children.find(c => c instanceof THREE.AudioListener) as THREE.AudioListener;
+      if (listener) {
+        listener.setMasterVolume(settings.volume);
+      }
+    }
+
+    // Apply FOV
+    if (this.camera && !this.introActive && (!this.weaponSystem || !this.weaponSystem.isZoomed)) {
+      this.camera.fov = settings.fov;
+      this.camera.updateProjectionMatrix();
+      CAMERA_CONFIG.baseFOV = settings.fov;
+    }
+  }
+
   private setupEventListeners(): void {
     this.inputManager.setJumpCallback(() => {
       this.player.jumpBufferTimer = PLAYER_CONFIG.jumpBuffer;
@@ -366,19 +418,23 @@ export class Game {
       });
     }
 
-    const quitBtn = document.getElementById('quit-btn');
-    if (quitBtn) {
-      quitBtn.addEventListener('click', () => {
-        this.returnToLobby();
-      });
-    }
-
     const lobbyBtn = document.getElementById('lobby-btn');
     if (lobbyBtn) {
       lobbyBtn.addEventListener('click', () => {
         this.returnToLobby();
       });
     }
+
+    this.hudManager.setupSettingsMenu(
+      this.settingsManager,
+      () => { // On Back
+        this.applySettings();
+        this.tryRequestPointerLock();
+      },
+      () => { // On Change
+        this.applySettings();
+      }
+    );
   }
 
   private returnToLobby(): void {
@@ -412,7 +468,7 @@ export class Game {
     }
   }
 
-  private tryExitPointerLock(): void {
+  public tryExitPointerLock(): void {
     if (this.isMobile) {
       // Nothing to do on mobile
       return;
@@ -437,14 +493,25 @@ export class Game {
     const token = urlParams.get('token');
     const matchId = urlParams.get('matchId') || undefined;
 
+    // Map Selection based on Mode
+    if (modeParam === 'battle-royale' || modeParam === 'br') {
+      console.log('Loading Battle Royale Map...');
+      // Re-initialize Arena with BR Map
+      // Note: Ideally we should have a method to switch maps without recreating everything, 
+      // but for now this is the cleanest way given the current architecture.
+      // We need to clear old arena objects first if any exist (though this is start of game)
+      this.arena = new Arena(this.scene, BATTLE_ROYALE_MAP);
+      this.pickupSystem.setArena(this.arena); // Update reference
+    }
+
     // Connect to backend if token is present (Social/Multiplayer context)
     if (token) {
       console.log('Token found, connecting to backend...');
       this.backendConnector.setToken(token);
       this.backendConnector.getLoadout().then((loadout: any) => {
-        if (loadout) {
+        if (loadout && loadout.equipped) {
           console.log('Loadout received:', loadout);
-          // TODO: Apply loadout to player/weapon system
+          this.weaponSystem.setLoadout(loadout.equipped.primary, loadout.equipped.secondary);
         }
       });
 
@@ -478,9 +545,13 @@ export class Game {
 
       case 'ffa':
       case 'duel':
-      case 'br':
       case 'ctf':
         modeType = GameModeType.CAPTURE_THE_FLAG;
+        break;
+
+      case 'br':
+      case 'battle-royale':
+        modeType = GameModeType.BATTLE_ROYALE;
         break;
 
       case 'ffa':
@@ -856,7 +927,60 @@ export class Game {
     }
   }
 
-  private update(delta: number): void {
+  public update(delta: number): void {
+    // Spectator Mode Logic
+    if (this.isSpectating) {
+      const remotePlayers = this.networkManager.getRemotePlayers();
+      let targetMesh: THREE.Object3D | null = null;
+
+      if (remotePlayers.length > 0) {
+        if (!this.spectatorTargetId) {
+          this.spectatorTargetId = remotePlayers[0].id;
+        }
+        const target = remotePlayers.find(p => p.id === this.spectatorTargetId) || remotePlayers[0];
+        if (target) targetMesh = target.mesh;
+      } else {
+        // Fallback to spectating enemies
+        const enemies = this.enemyManager.getEnemies();
+        if (enemies.length > 0) {
+          targetMesh = enemies[0].mesh;
+        }
+      }
+
+      if (targetMesh) {
+        // Third-person follow camera
+        // Calculate desired position (behind and above)
+        const offset = new THREE.Vector3(0, 3, 5);
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetMesh.rotation.y);
+
+        const desiredPos = targetMesh.position.clone().add(offset);
+        const lookAtTarget = targetMesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+
+        // Smoothly move camera
+        this.camera.position.lerp(desiredPos, delta * 5);
+        this.camera.lookAt(lookAtTarget);
+      }
+    }
+
+
+
+    // Update Minimap (Always update if BR mode)
+    const currentMode = this.gameModeManager.getCurrentMode();
+    if (currentMode && currentMode.getName() === 'Battle Royale') {
+      const brMode = currentMode as any;
+      this.hudManager.updateMinimap(
+        { x: this.player.position.x, z: this.player.position.z },
+        BATTLE_ROYALE_MAP.size,
+        brMode.zoneRadius || 500,
+        brMode.zoneCenter || { x: 0, z: 0 },
+        this.networkManager.getRemotePlayers().map(p => ({
+          x: p.mesh.position.x,
+          z: p.mesh.position.z,
+          team: (p as any).team
+        }))
+      );
+    }
+
     if (!this.gameState.running || this.gameState.paused) return;
 
     // Handle intro sequence
@@ -866,84 +990,86 @@ export class Game {
     }
 
     // Input - use mobile controls if on mobile, otherwise use keyboard/mouse
-    let inputDir: THREE.Vector3;
-    let wantsToSprint: boolean;
-    let wantsJump: boolean;
-    let wantsCrouch: boolean;
-    let canCutJump: boolean;
-    let isFiring: boolean;
+    let inputDir: THREE.Vector3 = new THREE.Vector3();
+    let wantsToSprint: boolean = false;
+    let wantsJump: boolean = false;
+    let wantsCrouch: boolean = false;
+    let canCutJump: boolean = false;
+    let isFiring: boolean = false;
 
-    if (this.isMobile && this.mobileControls) {
-      // Mobile input
-      this.mobileControls.update();
-
-      // Convert 2D mobile input (x, y) -> 3D world input (x, 0, z)
-      inputDir = new THREE.Vector3(
-        this.mobileControls.movementInput.x,
-        0,
-        -this.mobileControls.movementInput.y
-      );
-      wantsToSprint = inputDir.length() > 0.5;
-      wantsJump = this.mobileControls.jumpPressed;
-      wantsCrouch = false;
-      canCutJump = !this.mobileControls.jumpPressed && this.player.canCutJump;
-      isFiring = this.mobileControls.firePressed;
-
-      // Update Game Mode
-      // this.gameModeManager.update(delta); // Moved to shared code
-      if (this.mobileControls.reloadPressed) {
-        this.tryReload();
-      }
-
-      // Handle weapon switching
-      if (this.mobileControls.weaponSwitchRequested !== 0) {
-        this.weaponSystem.scrollWeapon(this.mobileControls.weaponSwitchRequested);
-        this.hudManager.updateWeaponName(WEAPON_CONFIG[this.weaponSystem.currentWeaponType].name);
-        this.mobileControls.weaponSwitchRequested = 0;
-      }
-
-      // Update player rotation from mobile touch
-      const mobileLookMultiplier = 1.8;
-      this.player.rotation.y -= this.mobileControls.lookDelta.x * mobileLookMultiplier;
-      this.player.rotation.x -= this.mobileControls.lookDelta.y * mobileLookMultiplier;
-      this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
-
-      // Jump handling
-      if (wantsJump) {
-        this.player.jumpBufferTimer = PLAYER_CONFIG.jumpBuffer;
+    // Dead check
+    if (this.player.isDead()) {
+      this.weaponSystem.setVisible(false);
+      // Disable rotation if spectating or dead
+      if (this.isSpectating) {
+        // Spectator camera logic handles rotation
       }
     } else {
-      // Desktop input
-      this.inputManager.update();
-      inputDir = this.inputManager.getMovementInput();
-      wantsToSprint = this.inputManager.isActionPressed(GameAction.Sprint) && inputDir.length() > 0;
-      wantsJump = this.player.jumpBufferTimer > 0;
-      wantsCrouch = this.inputManager.isActionPressed(GameAction.Crouch);
-      canCutJump = !this.inputManager.isActionPressed(GameAction.Jump) && this.player.canCutJump;
-      isFiring = this.inputManager.isActionPressed(GameAction.Fire);
+      // Input - use mobile controls if on mobile, otherwise use keyboard/mouse
+      if (this.isMobile && this.mobileControls) {
+        // Mobile input
+        this.mobileControls.update();
 
-      // Update player rotation from mouse
-      this.player.rotation.y -= this.inputManager.mouse.deltaX;
-      this.player.rotation.x -= this.inputManager.mouse.deltaY;
-      this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
-      this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
-      this.inputManager.resetMouseDelta();
+        // Convert 2D mobile input (x, y) -> 3D world input (x, 0, z)
+        inputDir = new THREE.Vector3(
+          this.mobileControls.movementInput.x,
+          0,
+          -this.mobileControls.movementInput.y
+        );
+        wantsToSprint = inputDir.length() > 0.5;
+        wantsJump = this.mobileControls.jumpPressed;
+        wantsCrouch = false;
+        canCutJump = !this.mobileControls.jumpPressed && this.player.canCutJump;
+        isFiring = this.mobileControls.firePressed;
+
+        // Update Game Mode
+        // this.gameModeManager.update(delta); // Moved to shared code
+        if (this.mobileControls.reloadPressed) {
+          this.tryReload();
+        }
+
+        // Handle weapon switching
+        if (this.mobileControls.weaponSwitchRequested !== 0) {
+          this.weaponSystem.scrollWeapon(this.mobileControls.weaponSwitchRequested);
+          this.hudManager.updateWeaponName(WEAPON_CONFIG[this.weaponSystem.currentWeaponType].name);
+          this.mobileControls.weaponSwitchRequested = 0;
+        }
+
+        // Update player rotation from mobile touch
+        const mobileLookMultiplier = 1.8;
+        this.player.rotation.y -= this.mobileControls.lookDelta.x * mobileLookMultiplier;
+        this.player.rotation.x -= this.mobileControls.lookDelta.y * mobileLookMultiplier;
+        this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
+
+        // Jump handling
+        if (wantsJump) {
+          this.player.jumpBufferTimer = PLAYER_CONFIG.jumpBuffer;
+        }
+      } else {
+        // Desktop input
+        this.inputManager.update();
+        inputDir = this.inputManager.getMovementInput();
+        wantsToSprint = this.inputManager.isActionPressed(GameAction.Sprint) && inputDir.length() > 0;
+        wantsJump = this.player.jumpBufferTimer > 0;
+        wantsCrouch = this.inputManager.isActionPressed(GameAction.Crouch);
+        canCutJump = !this.inputManager.isActionPressed(GameAction.Jump) && this.player.canCutJump;
+        isFiring = this.inputManager.isActionPressed(GameAction.Fire);
+
+        // Update player rotation from mouse
+        this.player.rotation.y -= this.inputManager.mouse.deltaX;
+        this.player.rotation.x -= this.inputManager.mouse.deltaY;
+        this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
+        this.player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.player.rotation.x));
+        this.inputManager.resetMouseDelta();
+      }
     }
+
 
     // Update Game Mode (Run for both Mobile and Desktop)
     this.gameModeManager.update(delta);
 
-    // Dead check
-    if (this.player.isDead()) {
-      inputDir = new THREE.Vector3(0, 0, 0);
-      wantsToSprint = false;
-      wantsJump = false;
-      wantsCrouch = false;
-      isFiring = false;
-    }
-
     // Update player
-    this.player.update(delta, inputDir, wantsToSprint, wantsJump, wantsCrouch, canCutJump, this.arena.arenaObjects);
+    this.player.update(delta, inputDir, wantsToSprint, wantsJump, wantsCrouch, canCutJump, this.arena.arenaObjects, this.arena.size);
     this.player.updatePowerups(delta);
 
     // Shooting
@@ -1013,7 +1139,9 @@ export class Game {
     this.projectileSystem.update(delta, this.arena.arenaObjects.map(obj => obj.mesh));
 
     // Update camera
-    this.updateCamera(delta);
+    if (!this.isSpectating) {
+      this.updateCamera(delta);
+    }
 
     // Update enemies
     this.enemyManager.update(delta, this.player.position, this.arena.navMeshObstacles, this.arena.arenaObjects, (enemy) => {
@@ -1522,8 +1650,12 @@ export class Game {
     this.gameTime += delta;
 
     this.update(delta);
-    this.networkManager.update(delta, this.player, this.camera);
-    this.postProcessing.render();
+    if (this.networkManager && this.player && this.camera) {
+      this.networkManager.update(delta, this.player, this.camera);
+    }
+    if (this.postProcessing) {
+      this.postProcessing.render();
+    }
   };
 
   private createExplosion(position: THREE.Vector3, radius: number, maxDamage: number): void {
@@ -1599,7 +1731,33 @@ export class Game {
   }
 
 
-  private handleDeath(): void {
+  public handleDeath(): void {
+    if (this.isDeadSequenceActive) return;
+    this.isDeadSequenceActive = true;
+
+    this.player.playDeathSound();
+    this.player.playDeathSound();
+    this.hudManager.showKillIcon();
+    this.weaponSystem.setVisible(false);
+
+    // Check for Battle Royale Mode
+    const currentMode = this.gameModeManager.getCurrentMode();
+    if (currentMode && currentMode.getName() === 'Battle Royale') {
+      console.log('Player died in Battle Royale - entering Spectator Mode');
+      this.isSpectating = true;
+      this.hudManager.showMessage('YOU DIED! SPECTATING...', 3000);
+
+      // Find a target to spectate
+      const remotePlayers = this.networkManager.getRemotePlayers();
+      if (remotePlayers.length > 0) {
+        this.spectatorTargetId = remotePlayers[0].id;
+        this.hudManager.showSpectatorUI(this.spectatorTargetId);
+      } else {
+        this.hudManager.showMessage('NO PLAYERS TO SPECTATE', 3000);
+      }
+      return; // Skip standard respawn logic
+    }
+
     // Disable controls
     this.tryExitPointerLock();
 
@@ -1632,7 +1790,9 @@ export class Game {
   }
 
   private respawn(): void {
+    this.isDeadSequenceActive = false;
     this.player.reset();
+    this.weaponSystem.setVisible(true);
     this.hudManager.hideGameOver();
     this.tryRequestPointerLock();
     this.networkManager.sendPlayerRespawn();

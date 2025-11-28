@@ -1166,6 +1166,125 @@ body.hovering {
   background-clip: text;
 }
 
+/* Settings Menu */
+#settings-menu {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 40px;
+  border: 2px solid #00ffff;
+  border-radius: 10px;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 400px;
+  z-index: 200;
+  backdrop-filter: blur(10px);
+}
+
+#settings-menu h1 {
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  text-align: center;
+  margin-bottom: 20px;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+  font-size: 32px;
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setting-row label {
+  color: #00ffff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.slider-container input[type="range"] {
+  flex-grow: 1;
+  height: 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #333;
+  border-radius: 3px;
+  outline: none;
+}
+
+.slider-container input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #00ffff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+  transition: transform 0.1s;
+}
+
+.slider-container input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.slider-container span {
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  min-width: 60px;
+  text-align: right;
+}
+
+#settings-back-btn {
+  margin-top: 20px;
+  padding: 15px;
+  background: transparent;
+  border: 2px solid #ef4444;
+  color: #ef4444;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#settings-back-btn:hover {
+  background: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+}
+
+#settings-btn {
+  margin-top: 10px;
+  padding: 15px;
+  background: transparent;
+  border: 2px solid #00ffff;
+  color: #00ffff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+#settings-btn:hover {
+  background: #00ffff;
+  color: #000;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+}
+
 #game-over .stats {
   font-size: 20px;
   margin-bottom: 30px;

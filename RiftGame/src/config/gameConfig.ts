@@ -46,7 +46,7 @@ export const ARENA_CONFIG: ArenaConfig = {
 };
 
 declare var process: { env: { [key: string]: string } };
-export const LOBBY_URL = process.env.VITE_LOBBY_URL || '/social';
+export const LOBBY_URL = process.env.VITE_LOBBY_URL || '/social/';
 
 const BASE_AUDIO_PATH = 'assets/audio/weapons/';
 

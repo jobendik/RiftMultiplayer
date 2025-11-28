@@ -1,38 +1,44 @@
 import * as THREE from 'three';
-import { ARENA_CONFIG } from '../config/gameConfig';
 import { SurfaceMaterial } from '../systems/ImpactSystem';
+import { MapConfig, MapObjectConfig } from '../config/MapConfig';
 
 export class Arena {
   private scene: THREE.Scene;
   public arenaObjects: Array<{ mesh: THREE.Mesh; box: THREE.Box3; material: SurfaceMaterial }> = [];
   public navMeshObstacles: Array<{ x: number; z: number; width: number; depth: number }> = [];
   private gridHelper?: THREE.GridHelper;
+  private config: MapConfig;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, config: MapConfig) {
     this.scene = scene;
+    this.config = config;
     this.build();
   }
 
+  public get size(): number {
+    return this.config.size;
+  }
+
   private build(): void {
-    const size = ARENA_CONFIG.size;
-    const wallHeight = ARENA_CONFIG.wallHeight;
+    const size = this.config.size;
+
 
     this.createFloor(size);
     this.createGrid(size);
-    this.createWalls(size, wallHeight);
+    this.createWalls(this.config.walls);
     this.createCenterPlatform();
-    this.createPlatforms();
-    this.createRamps();
-    this.createCover();
-    this.createPillars();
+    this.createPlatforms(this.config.platforms);
+    this.createRamps(this.config.ramps);
+    this.createCover(this.config.covers);
+    this.createPillars(this.config.pillars);
   }
 
   private createFloor(size: number): void {
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(size, size),
-      new THREE.MeshStandardMaterial({ 
-        color: 0x1a1a2a, 
-        metalness: 0.3, 
+      new THREE.MeshStandardMaterial({
+        color: 0x1a1a2a,
+        metalness: 0.3,
         roughness: 0.7
       })
     );
@@ -76,41 +82,45 @@ export class Arena {
     this.scene.add(this.gridHelper);
   }
 
-  private createWalls(size: number, wallHeight: number): void {
+  private createWalls(walls: MapObjectConfig[]): void {
     const wallMat = new THREE.MeshStandardMaterial({
       color: 0x2a2a3a,
       metalness: 0.5,
       roughness: 0.5,
     });
 
-    const wallPositions = [
-      { pos: [0, wallHeight / 2, -size / 2], rot: [0, 0, 0], size: [size, wallHeight, 1] },
-      { pos: [0, wallHeight / 2, size / 2], rot: [0, 0, 0], size: [size, wallHeight, 1] },
-      { pos: [-size / 2, wallHeight / 2, 0], rot: [0, Math.PI / 2, 0], size: [size, wallHeight, 1] },
-      { pos: [size / 2, wallHeight / 2, 0], rot: [0, Math.PI / 2, 0], size: [size, wallHeight, 1] },
-    ];
-
-    wallPositions.forEach((w, i) => {
+    walls.forEach((w) => {
       const wall = new THREE.Mesh(
         new THREE.BoxGeometry(w.size[0], w.size[1], w.size[2]),
         wallMat
       );
       wall.position.set(w.pos[0], w.pos[1], w.pos[2]);
-      wall.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
+      if (typeof w.rot === 'number') {
+        wall.rotation.y = w.rot;
+      } else if (w.rot) {
+        wall.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
+      }
+
       wall.receiveShadow = true;
       wall.castShadow = true;
       this.scene.add(wall);
       this.arenaObjects.push({ mesh: wall, box: new THREE.Box3().setFromObject(wall), material: SurfaceMaterial.BRICK });
 
-      const edge = new THREE.Mesh(
-        new THREE.BoxGeometry(w.size[0], 0.2, 0.1),
-        new THREE.MeshBasicMaterial({ 
-          color: [0x00ffff, 0xff00ff, 0xffff00, 0x00ff88][i]
-        })
-      );
-      edge.position.set(w.pos[0], wallHeight + 0.1, w.pos[2]);
-      edge.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
-      this.scene.add(edge);
+      if (w.accent) {
+        const edge = new THREE.Mesh(
+          new THREE.BoxGeometry(w.size[0], 0.2, 0.1),
+          new THREE.MeshBasicMaterial({ color: w.accent })
+        );
+        // Adjust edge position based on wall height and rotation
+        // Simple approximation for now, assumes vertical walls
+        edge.position.set(w.pos[0], w.pos[1] + w.size[1] / 2 + 0.1, w.pos[2]);
+        if (typeof w.rot === 'number') {
+          edge.rotation.y = w.rot;
+        } else if (w.rot) {
+          edge.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
+        }
+        this.scene.add(edge);
+      }
     });
   }
 
@@ -141,21 +151,12 @@ export class Arena {
     this.scene.add(centerBorder);
   }
 
-  private createPlatforms(): void {
+  private createPlatforms(platforms: MapObjectConfig[]): void {
     const platformMat = new THREE.MeshStandardMaterial({
       color: 0x2a3a4a,
       metalness: 0.7,
       roughness: 0.3,
     });
-
-    const platforms = [
-      { pos: [15, 1.5, 15], size: [8, 3, 8], accent: 0x00ffff },
-      { pos: [-15, 1.5, -15], size: [8, 3, 8], accent: 0xff00ff },
-      { pos: [15, 1.5, -15], size: [8, 3, 8], accent: 0xffff00 },
-      { pos: [-15, 1.5, 15], size: [8, 3, 8], accent: 0x00ff88 },
-      { pos: [0, 2, 20], size: [12, 4, 6], accent: 0x00aaff },
-      { pos: [0, 2, -20], size: [12, 4, 6], accent: 0xff5500 },
-    ];
 
     platforms.forEach((p) => {
       const platform = new THREE.Mesh(
@@ -168,35 +169,32 @@ export class Arena {
       this.scene.add(platform);
       this.arenaObjects.push({ mesh: platform, box: new THREE.Box3().setFromObject(platform), material: SurfaceMaterial.METAL });
 
-      const edge = new THREE.Mesh(
-        new THREE.BoxGeometry(p.size[0] + 0.2, 0.15, p.size[2] + 0.2),
-        new THREE.MeshBasicMaterial({ color: p.accent })
-      );
-      edge.position.set(p.pos[0], p.pos[1] + p.size[1] / 2 + 0.08, p.pos[2]);
-      this.scene.add(edge);
+      if (p.accent) {
+        const edge = new THREE.Mesh(
+          new THREE.BoxGeometry(p.size[0] + 0.2, 0.15, p.size[2] + 0.2),
+          new THREE.MeshBasicMaterial({ color: p.accent })
+        );
+        edge.position.set(p.pos[0], p.pos[1] + p.size[1] / 2 + 0.08, p.pos[2]);
+        this.scene.add(edge);
+      }
     });
   }
 
-  private createRamps(): void {
+  private createRamps(ramps: MapObjectConfig[]): void {
     const rampMat = new THREE.MeshStandardMaterial({
       color: 0x3a4a3a,
       metalness: 0.5,
       roughness: 0.5,
     });
 
-    const ramps = [
-      { pos: [15, 0.5, 10], size: [8, 1, 6], rot: -0.3 },
-      { pos: [-15, 0.5, 10], size: [8, 1, 6], rot: 0.3 },
-      { pos: [15, 0.5, -10], size: [8, 1, 6], rot: 0.3 },
-      { pos: [-15, 0.5, -10], size: [8, 1, 6], rot: -0.3 },
-      { pos: [0, 1, 16], size: [6, 2, 4], rot: -0.4 },
-      { pos: [0, 1, -16], size: [6, 2, 4], rot: 0.4 },
-    ];
-
     ramps.forEach((r) => {
       const ramp = new THREE.Mesh(new THREE.BoxGeometry(r.size[0], r.size[1], r.size[2]), rampMat);
       ramp.position.set(r.pos[0], r.pos[1], r.pos[2]);
-      ramp.rotation.x = r.rot;
+      if (typeof r.rot === 'number') {
+        ramp.rotation.x = r.rot; // Ramps usually rotate on X
+      } else if (r.rot) {
+        ramp.rotation.set(r.rot[0], r.rot[1], r.rot[2]);
+      }
       ramp.receiveShadow = true;
       ramp.castShadow = true;
       this.scene.add(ramp);
@@ -204,23 +202,12 @@ export class Arena {
     });
   }
 
-  private createCover(): void {
+  private createCover(covers: MapObjectConfig[]): void {
     const coverMat = new THREE.MeshStandardMaterial({
       color: 0x4a3a2a,
       metalness: 0.4,
       roughness: 0.6,
     });
-
-    const covers = [
-      { pos: [8, 0.75, 0], size: [1.5, 1.5, 4] },
-      { pos: [-8, 0.75, 0], size: [1.5, 1.5, 4] },
-      { pos: [0, 0.75, 8], size: [4, 1.5, 1.5] },
-      { pos: [0, 0.75, -8], size: [4, 1.5, 1.5] },
-      { pos: [18, 0.5, 0], size: [1, 1, 6] },
-      { pos: [-18, 0.5, 0], size: [1, 1, 6] },
-      { pos: [0, 0.5, 18], size: [6, 1, 1] },
-      { pos: [0, 0.5, -18], size: [6, 1, 1] },
-    ];
 
     covers.forEach((c) => {
       const cover = new THREE.Mesh(new THREE.BoxGeometry(c.size[0], c.size[1], c.size[2]), coverMat);
@@ -238,23 +225,17 @@ export class Arena {
     });
   }
 
-  private createPillars(): void {
+  private createPillars(pillars: number[][]): void {
     const pillarMat = new THREE.MeshStandardMaterial({
       color: 0x3a3a4a,
       metalness: 0.8,
       roughness: 0.2,
     });
 
-    const pillars = [
-      [12, 0, 12],
-      [-12, 0, 12],
-      [12, 0, -12],
-      [-12, 0, -12],
-    ];
-
     pillars.forEach((pos, i) => {
       const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 6, 8), pillarMat);
-      pillar.position.set(pos[0], 3, pos[1]);
+      // Assuming y=3 is standard for pillars based on previous code
+      pillar.position.set(pos[0], 3, pos[2]);
       pillar.receiveShadow = true;
       pillar.castShadow = true;
       this.scene.add(pillar);
@@ -262,11 +243,11 @@ export class Arena {
 
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(1.2, 0.1, 8, 16),
-        new THREE.MeshBasicMaterial({ 
-          color: [0x00ffff, 0xff00ff, 0xffff00, 0x00ff88][i]
+        new THREE.MeshBasicMaterial({
+          color: [0x00ffff, 0xff00ff, 0xffff00, 0x00ff88][i % 4]
         })
       );
-      ring.position.set(pos[0], 5.5, pos[1]);
+      ring.position.set(pos[0], 5.5, pos[2]);
       ring.rotation.x = Math.PI / 2;
       this.scene.add(ring);
     });

@@ -7,7 +7,7 @@ const fs = require('fs');
 // Read .env file manually
 const envPath = path.join(__dirname, '.env');
 const envVars = {
-  'process.env.VITE_LOBBY_URL': JSON.stringify('http://localhost:5173')
+  'process.env.VITE_LOBBY_URL': JSON.stringify('/social/')
 };
 
 if (fs.existsSync(envPath)) {
@@ -61,5 +61,16 @@ module.exports = {
     compress: true,
     port: 8080,
     hot: true,
+    proxy: {
+      '/api': 'http://localhost:3000',
+      '/socket.io': {
+        target: 'http://localhost:3000',
+        ws: true
+      },
+      '/social': {
+        target: 'http://localhost:5173',
+        changeOrigin: true
+      }
+    }
   },
 };

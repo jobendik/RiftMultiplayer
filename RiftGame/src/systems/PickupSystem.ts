@@ -160,8 +160,55 @@ export class PickupSystem {
     this.create(powerupTypes[wave % 3], getValidPosition(20));
   }
 
+  public spawnRandomLoot(mapConfig: any): void {
+    const size = mapConfig.size;
+    const lootCount = 50; // Total items to spawn
+
+    const getValidPosition = (): THREE.Vector3 => {
+      for (let i = 0; i < 20; i++) {
+        const x = (Math.random() - 0.5) * (size - 20); // Stay within bounds
+        const z = (Math.random() - 0.5) * (size - 20);
+
+        // Raycast down to find ground height? Or just assume y=0.5 for now?
+        // For now, assume ground level + simple collision check
+        // Ideally we'd use physics or raycasting against the arena mesh
+        const pos = new THREE.Vector3(x, 0.5, z);
+
+        // Simple check against walls/platforms (bounding boxes)
+        const pickupBox = new THREE.Box3().setFromCenterAndSize(pos, new THREE.Vector3(0.8, 0.8, 0.8));
+        let collision = false;
+        for (const obj of this.arena.arenaObjects) {
+          if (pickupBox.intersectsBox(obj.box)) {
+            // If it's a platform, maybe spawn ON TOP?
+            // For MVP simplicity, just avoid collision
+            collision = true;
+            break;
+          }
+        }
+        if (!collision) return pos;
+      }
+      return new THREE.Vector3(0, 0.5, 0);
+    };
+
+    for (let i = 0; i < lootCount; i++) {
+      const rand = Math.random();
+      let type = 'ammo';
+      if (rand < 0.2) type = 'health';
+      else if (rand < 0.35) type = 'armor';
+      else if (rand < 0.45) type = 'damage';
+      else if (rand < 0.55) type = 'speed';
+      else if (rand < 0.65) type = 'rapid';
+
+      this.create(type, getValidPosition());
+    }
+  }
+
   public clear(): void {
     this.pickups.forEach((p) => this.scene.remove(p.mesh));
     this.pickups.length = 0;
+  }
+
+  public setArena(arena: Arena): void {
+    this.arena = arena;
   }
 }

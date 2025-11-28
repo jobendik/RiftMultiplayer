@@ -11,6 +11,10 @@ export class RemotePlayer {
     public isSprinting: boolean = false;
     public isGrounded: boolean = true;
 
+    public get id(): string {
+        return this.userId;
+    }
+
 
 
     constructor(scene: THREE.Scene, userId: string) {

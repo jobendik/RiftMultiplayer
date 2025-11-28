@@ -71,6 +71,9 @@ export class HUDManager {
     this.vignetteImpactFlash = document.getElementById('vignette-impact-flash')!;
     this.vignetteDamagePulse = document.getElementById('vignette-damage-pulse')!;
     this.vignetteCritical = document.getElementById('vignette-critical')!;
+
+    // Hide wave display by default
+    this.waveDisplay.style.display = 'none';
   }
 
   public updateHealth(health: number, maxHealth: number): void {
@@ -409,6 +412,14 @@ export class HUDManager {
     (document.getElementById('pause-menu')! as HTMLElement).style.display = show ? 'flex' : 'none';
   }
 
+  public hideWaveDisplay(): void {
+    this.waveDisplay.style.display = 'none';
+  }
+
+  public showWaveDisplay(): void {
+    this.waveDisplay.style.display = 'block';
+  }
+
   public hideStartScreen(): void {
     (document.getElementById('start-screen')! as HTMLElement).style.display = 'none';
   }
@@ -647,5 +658,210 @@ export class HUDManager {
   public hideFlagStatus(): void {
     const el = document.getElementById('flag-status');
     if (el) el.style.display = 'none';
+  }
+
+  public updateZoneInfo(radius: number, timeToShrink: number): void {
+    let zoneEl = document.getElementById('zone-info');
+    if (!zoneEl) {
+      zoneEl = document.createElement('div');
+      zoneEl.id = 'zone-info';
+      zoneEl.style.position = 'absolute';
+      zoneEl.style.top = '100px';
+      zoneEl.style.right = '20px';
+      zoneEl.style.textAlign = 'right';
+      zoneEl.style.fontFamily = "'Orbitron', sans-serif";
+      zoneEl.style.color = '#fff';
+      zoneEl.style.textShadow = '0 0 5px rgba(0,0,0,0.8)';
+      document.body.appendChild(zoneEl);
+    }
+
+    const timeStr = timeToShrink > 0 ? `SHRINKING IN: ${Math.ceil(timeToShrink)}s` : 'ZONE SHRINKING!';
+    const color = timeToShrink > 0 ? '#fff' : '#ef4444';
+
+    zoneEl.innerHTML = `
+          <div style="font-size: 18px; font-weight: bold; color: ${color}">${timeStr}</div>
+          <div style="font-size: 14px; color: #aaa">ZONE RADIUS: ${Math.round(radius)}m</div>
+      `;
+    zoneEl.style.display = 'block';
+  }
+
+  public updateAliveCount(count: number): void {
+    let aliveEl = document.getElementById('alive-count');
+    if (!aliveEl) {
+      aliveEl = document.createElement('div');
+      aliveEl.id = 'alive-count';
+      aliveEl.style.position = 'absolute';
+      aliveEl.style.top = '20px';
+      aliveEl.style.right = '20px';
+      aliveEl.style.fontFamily = "'Orbitron', sans-serif";
+      aliveEl.style.fontSize = '24px';
+      aliveEl.style.fontWeight = 'bold';
+      aliveEl.style.color = '#fff';
+      aliveEl.style.textShadow = '0 0 5px rgba(0,0,0,0.8)';
+      document.body.appendChild(aliveEl);
+    }
+    aliveEl.textContent = `ALIVE: ${count}`;
+    aliveEl.style.display = 'block';
+  }
+
+  public showSpectatorUI(targetName: string): void {
+    let specEl = document.getElementById('spectator-ui');
+    if (!specEl) {
+      specEl = document.createElement('div');
+      specEl.id = 'spectator-ui';
+      specEl.style.position = 'absolute';
+      specEl.style.bottom = '100px';
+      specEl.style.left = '50%';
+      specEl.style.transform = 'translateX(-50%)';
+      specEl.style.fontFamily = "'Orbitron', sans-serif";
+      specEl.style.fontSize = '20px';
+      specEl.style.fontWeight = 'bold';
+      specEl.style.color = '#fbbf24'; // Amber
+      specEl.style.textShadow = '0 0 5px rgba(0,0,0,0.8)';
+      document.body.appendChild(specEl);
+    }
+    specEl.textContent = `SPECTATING: ${targetName}`;
+    specEl.style.display = 'block';
+
+    // Hide normal HUD elements
+    this.hideHUD();
+  }
+
+  public updateMinimap(playerPos: { x: number, z: number }, mapSize: number, zoneRadius: number, zoneCenter: { x: number, z: number }, remotePlayers: Array<{ x: number, z: number, team?: string }>): void {
+    let minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
+    if (!minimapCanvas) {
+      const container = document.createElement('div');
+      container.id = 'minimap-container';
+      container.style.position = 'absolute';
+      container.style.bottom = '20px';
+      container.style.right = '20px';
+      container.style.width = '200px';
+      container.style.height = '200px';
+      container.style.border = '2px solid #fff';
+      container.style.borderRadius = '50%';
+      container.style.overflow = 'hidden';
+      container.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+      document.body.appendChild(container);
+
+      minimapCanvas = document.createElement('canvas');
+      minimapCanvas.id = 'minimap-canvas';
+      minimapCanvas.width = 200;
+      minimapCanvas.height = 200;
+      container.appendChild(minimapCanvas);
+    }
+
+    const ctx = minimapCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const size = 200;
+    const center = size / 2;
+    const scale = size / mapSize; // Map world units to pixels
+
+    ctx.clearRect(0, 0, size, size);
+
+    // Draw Zone
+    ctx.beginPath();
+    ctx.arc(
+      center + zoneCenter.x * scale,
+      center + zoneCenter.z * scale,
+      zoneRadius * scale,
+      0, Math.PI * 2
+    );
+    ctx.fillStyle = 'rgba(0, 100, 255, 0.2)';
+    ctx.fill();
+    ctx.strokeStyle = '#0066ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw Remote Players (if visible/teammates)
+    remotePlayers.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(center + p.x * scale, center + p.z * scale, 3, 0, Math.PI * 2);
+      ctx.fillStyle = p.team === 'blue' ? '#3b82f6' : '#ef4444';
+      ctx.fill();
+    });
+
+    // Draw Local Player
+    ctx.beginPath();
+    ctx.arc(center + playerPos.x * scale, center + playerPos.z * scale, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#00ff00';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  public setupSettingsMenu(
+    settingsManager: any,
+    onBack: () => void,
+    onChange?: () => void
+  ): void {
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsMenu = document.getElementById('settings-menu');
+    const backBtn = document.getElementById('settings-back-btn');
+    const pauseMenu = document.getElementById('pause-menu');
+
+    const sensSlider = document.getElementById('sensitivity-slider') as HTMLInputElement;
+    const sensValue = document.getElementById('sensitivity-value');
+    const volSlider = document.getElementById('volume-slider') as HTMLInputElement;
+    const volValue = document.getElementById('volume-value');
+    const fovSlider = document.getElementById('fov-slider') as HTMLInputElement;
+    const fovValue = document.getElementById('fov-value');
+
+    if (settingsBtn && settingsMenu && backBtn && pauseMenu) {
+      settingsBtn.addEventListener('click', () => {
+        pauseMenu.style.display = 'none';
+        settingsMenu.style.display = 'flex';
+
+        // Load current values
+        const current = settingsManager.getSettings();
+        if (sensSlider && sensValue) {
+          sensSlider.value = current.sensitivity.toString();
+          sensValue.textContent = current.sensitivity.toFixed(4);
+        }
+        if (volSlider && volValue) {
+          volSlider.value = current.volume.toString();
+          volValue.textContent = `${Math.round(current.volume * 100)}%`;
+        }
+        if (fovSlider && fovValue) {
+          fovSlider.value = current.fov.toString();
+          fovValue.textContent = current.fov.toString();
+        }
+      });
+
+      backBtn.addEventListener('click', () => {
+        settingsMenu.style.display = 'none';
+        pauseMenu.style.display = 'flex';
+        onBack();
+      });
+    }
+
+    // Bind sliders
+    if (sensSlider && sensValue) {
+      sensSlider.addEventListener('input', (e: any) => {
+        const val = parseFloat(e.target.value);
+        settingsManager.setSensitivity(val);
+        sensValue.textContent = val.toFixed(4);
+        if (onChange) onChange();
+      });
+    }
+
+    if (volSlider && volValue) {
+      volSlider.addEventListener('input', (e: any) => {
+        const val = parseFloat(e.target.value);
+        settingsManager.setVolume(val);
+        volValue.textContent = `${Math.round(val * 100)}%`;
+        if (onChange) onChange();
+      });
+    }
+
+    if (fovSlider && fovValue) {
+      fovSlider.addEventListener('input', (e: any) => {
+        const val = parseInt(e.target.value);
+        settingsManager.setFOV(val);
+        fovValue.textContent = val.toString();
+        if (onChange) onChange();
+      });
+    }
   }
 }

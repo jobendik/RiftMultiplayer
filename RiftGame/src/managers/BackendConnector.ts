@@ -26,7 +26,7 @@ export class BackendConnector {
     private token: string;
 
     constructor() {
-        this.baseUrl = 'http://localhost:3000/api/game';
+        this.baseUrl = '/api/game';
         this.token = '';
     }
 

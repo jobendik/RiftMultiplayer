@@ -7,6 +7,7 @@ export class WeaponSystem {
   public currentWeaponType: WeaponType = WeaponType.AK47;
   public lastWeaponType: WeaponType = WeaponType.Pistol;
   private weapons: Record<WeaponType, { mag: number; reserve: number }>;
+  private equippedWeapons: WeaponType[] = Object.values(WeaponType); // Default to all
 
   public isReloading = false;
   public isZoomed = false;
@@ -175,10 +176,40 @@ export class WeaponSystem {
     );
   }
 
+  public setLoadout(primary: string, secondary: string): void {
+    const newLoadout: WeaponType[] = [];
+
+    // Helper to check if a string is a valid WeaponType
+    const isValidWeapon = (w: string): w is WeaponType => {
+      return Object.values(WeaponType).includes(w as WeaponType);
+    };
+
+    if (isValidWeapon(primary)) {
+      newLoadout.push(primary);
+    } else {
+      console.warn(`Invalid primary weapon: ${primary}, defaulting to AK47`);
+      newLoadout.push(WeaponType.AK47);
+    }
+
+    if (isValidWeapon(secondary)) {
+      newLoadout.push(secondary);
+    } else {
+      console.warn(`Invalid secondary weapon: ${secondary}, defaulting to Pistol`);
+      newLoadout.push(WeaponType.Pistol);
+    }
+
+    this.equippedWeapons = newLoadout;
+    console.log('WeaponSystem loadout set:', this.equippedWeapons);
+
+    // Switch to primary immediately
+    this.currentWeaponType = this.equippedWeapons[0];
+    this.resetWeaponState();
+  }
+
   public switchWeapon(index: number): void {
-    const types = Object.values(WeaponType);
-    if (index >= 0 && index < types.length) {
-      const newType = types[index];
+    // Index is now into equippedWeapons, not all types
+    if (index >= 0 && index < this.equippedWeapons.length) {
+      const newType = this.equippedWeapons[index];
       if (newType !== this.currentWeaponType) {
         // Cancel reload if active
         if (this.isReloading) {
@@ -200,20 +231,26 @@ export class WeaponSystem {
   }
 
   public toggleLastWeapon(): void {
-    const types = Object.values(WeaponType);
-    const index = types.indexOf(this.lastWeaponType);
+    // Find index of last weapon in equipped list
+    const index = this.equippedWeapons.indexOf(this.lastWeaponType);
     if (index !== -1) {
       this.switchWeapon(index);
+    } else {
+      // If last weapon is not in loadout (e.g. after loadout change), switch to other weapon
+      const currentIndex = this.equippedWeapons.indexOf(this.currentWeaponType);
+      const nextIndex = (currentIndex + 1) % this.equippedWeapons.length;
+      this.switchWeapon(nextIndex);
     }
   }
 
   public scrollWeapon(delta: number): void {
-    const types = Object.values(WeaponType);
-    let currentIndex = types.indexOf(this.currentWeaponType);
+    let currentIndex = this.equippedWeapons.indexOf(this.currentWeaponType);
+    if (currentIndex === -1) currentIndex = 0; // Should not happen
+
     currentIndex += delta;
 
-    if (currentIndex < 0) currentIndex = types.length - 1;
-    if (currentIndex >= types.length) currentIndex = 0;
+    if (currentIndex < 0) currentIndex = this.equippedWeapons.length - 1;
+    if (currentIndex >= this.equippedWeapons.length) currentIndex = 0;
 
     this.switchWeapon(currentIndex);
   }
@@ -239,6 +276,10 @@ export class WeaponSystem {
     }
 
     return true;
+  }
+
+  public setVisible(visible: boolean): void {
+    this.weaponGroup.visible = visible;
   }
 
   public reload(): void {

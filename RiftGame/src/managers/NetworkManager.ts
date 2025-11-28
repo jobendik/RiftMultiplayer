@@ -34,7 +34,7 @@ export class NetworkManager {
         this.myUserId = userIdStr;
 
         console.log('Connecting to game server...');
-        this.socket = io('http://localhost:3000', {
+        this.socket = io('/', {
             auth: { token },
             transports: ['websocket']
         });
@@ -249,6 +249,7 @@ export class NetworkManager {
     }
 
     public sendShoot(origin: THREE.Vector3, direction: THREE.Vector3, weaponType: string) {
+        if (!this.socket) return;
         this.socket.emit('player_shoot', {
             matchId: this.matchId,
             origin,
@@ -265,6 +266,8 @@ export class NetworkManager {
             return;
         }
 
+        if (!this.socket) return;
+
         this.socket.emit('player_hit', {
             matchId: this.matchId,
             targetId,
@@ -274,6 +277,7 @@ export class NetworkManager {
     }
 
     public sendPlayerDied(attackerId: string, weaponType: string) {
+        if (!this.socket) return;
         this.socket.emit('player_died', {
             matchId: this.matchId,
             attackerId,
@@ -282,12 +286,14 @@ export class NetworkManager {
     }
 
     public sendPlayerRespawn() {
+        if (!this.socket) return;
         this.socket.emit('player_respawn', {
             matchId: this.matchId
         });
     }
 
     public sendFlagAction(action: string, team: string, position?: THREE.Vector3) {
+        if (!this.socket) return;
         this.socket.emit('flag_action', {
             matchId: this.matchId,
             action,
