@@ -18,7 +18,7 @@ import { StartScreen } from './ui/StartScreen';
 import { MobileControls } from './ui/MobileControls';
 import { ExplosionSystem } from './systems/ExplosionSystem';
 import { GameState } from './types';
-import { PLAYER_CONFIG, CAMERA_CONFIG, WEAPON_CONFIG } from './config/gameConfig';
+import { PLAYER_CONFIG, CAMERA_CONFIG, WEAPON_CONFIG, LOBBY_URL } from './config/gameConfig';
 import { DamageType } from './core/DamageTypes';
 import { BackendConnector } from './managers/BackendConnector';
 import { NetworkManager } from './managers/NetworkManager';
@@ -158,12 +158,7 @@ export class Game {
     this.postProcessing = new PostProcessing(this.renderer, this.scene, this.camera);
 
     this.backendConnector = new BackendConnector();
-    this.backendConnector.getLoadout().then((loadout: any) => {
-      if (loadout) {
-        console.log('Loadout received:', loadout);
-        // TODO: Apply loadout to player/weapon system
-      }
-    });
+    // Loadout fetch deferred to startGame
 
     // Initialize mobile controls if on mobile device
     this.isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -388,7 +383,7 @@ export class Game {
 
   private returnToLobby(): void {
     console.log('Returning to lobby...');
-    window.location.href = 'http://localhost:5173';
+    window.location.href = LOBBY_URL;
   }
 
   private tryRequestPointerLock(): void {
@@ -439,6 +434,22 @@ export class Game {
     // Determine game mode from URL
     const urlParams = new URLSearchParams(window.location.search);
     const modeParam = urlParams.get('mode') || 'arena-classic';
+    const token = urlParams.get('token');
+    const matchId = urlParams.get('matchId') || undefined;
+
+    // Connect to backend if token is present (Social/Multiplayer context)
+    if (token) {
+      console.log('Token found, connecting to backend...');
+      this.backendConnector.setToken(token);
+      this.backendConnector.getLoadout().then((loadout: any) => {
+        if (loadout) {
+          console.log('Loadout received:', loadout);
+          // TODO: Apply loadout to player/weapon system
+        }
+      });
+
+      this.networkManager.connect(token, matchId);
+    }
 
     let modeType = GameModeType.SINGLE_PLAYER_WAVE;
 

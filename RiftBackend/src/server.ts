@@ -22,14 +22,33 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// Request Logger
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
 // Make io accessible in routes
 app.set('io', io);
 
 // Routes
+// Mount on both /api/... and /... to handle different Nginx proxy_pass configurations
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
+
 app.use('/api/social', socialRoutes);
+app.use('/social', socialRoutes);
+
 app.use('/api/game', gameRoutes);
+app.use('/game', gameRoutes);
+
 app.use('/api/shop', shopRoutes);
+app.use('/shop', shopRoutes);
+
+// Health check
+app.get('/', (req, res) => {
+    res.send('RiftBackend Online');
+});
 
 // Socket.IO
 setupSocket(io);

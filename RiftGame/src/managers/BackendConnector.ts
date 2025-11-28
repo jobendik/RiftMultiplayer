@@ -27,8 +27,11 @@ export class BackendConnector {
 
     constructor() {
         this.baseUrl = 'http://localhost:3000/api/game';
-        // Hardcoded for dev: User 1 (RiftPlayerOne)
-        this.token = 'mock-jwt-token-1';
+        this.token = '';
+    }
+
+    public setToken(token: string) {
+        this.token = token;
     }
 
     private async request(endpoint: string, options: RequestInit = {}): Promise<any> {

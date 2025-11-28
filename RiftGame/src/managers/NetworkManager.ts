@@ -19,23 +19,21 @@ export class NetworkManager {
 
     constructor(game: Game) {
         this.game = game;
+        this.myUserId = '0';
+        // Socket initialized in connect()
+        this.socket = null as any;
+    }
 
-        // Get token from URL or generate random
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token') || `mock-jwt-token-${Math.floor(Math.random() * 1000)}`;
+    public connect(token: string, matchId?: string) {
+        if (this.socket) return; // Already connected
 
-        // Get matchId from URL if present
-        const matchIdParam = urlParams.get('matchId');
-        if (matchIdParam) {
-            this.matchId = matchIdParam;
-            console.log('Joining specific match:', this.matchId);
-        }
+        this.matchId = matchId || 'deathmatch_room';
 
-        // Extract user ID from token for local comparison (must match server logic)
-        // Server logic: parseInt(token.split('-').pop() || '0')
+        // Extract user ID from token for local comparison
         const userIdStr = token.split('-').pop() || '0';
-        this.myUserId = userIdStr; // Keep as string for now as RemotePlayer uses string, but value is numeric
+        this.myUserId = userIdStr;
 
+        console.log('Connecting to game server...');
         this.socket = io('http://localhost:3000', {
             auth: { token },
             transports: ['websocket']
@@ -232,7 +230,7 @@ export class NetworkManager {
     }
 
     private sendPlayerUpdate(player: any, camera: any) {
-        if (!this.socket.connected) return;
+        if (!this.socket || !this.socket.connected) return;
 
         const position = camera.position; // FPS camera position
         const rotation = {
