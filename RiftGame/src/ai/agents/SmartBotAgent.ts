@@ -14,7 +14,7 @@ export class SmartBotAgent extends GameEntity {
         this.target = target;
 
         this.brain = new Think(this);
-        this.brain.addEvaluator(new AttackEvaluator());
+        this.brain.addEvaluator(new AttackEvaluator<SmartBotAgent>());
 
         this.maxSpeed = 4;
     }

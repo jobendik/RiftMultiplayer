@@ -1,5 +1,6 @@
 import { Goal, Vector3 } from 'yuka';
 import { GameEntity } from '../core/GameEntity';
+import * as THREE from 'three';
 
 export class AttackEnemyGoal<T extends GameEntity> extends Goal<T> {
     private target: { position: THREE.Vector3 };
